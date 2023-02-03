@@ -1,5 +1,3 @@
-
-
 ########### An example, where data are generated from the model ####################
 
 # True parameter vector
@@ -17,6 +15,7 @@ println("true vals", "  ", γup,"  ", γdown,"  ", Z1, Z2, Z3, Z4)
 n = 25 # nr of subjects
 T = 50 # nr of times at which we observe
 
+# generate latent Markov process and observations (returns array of ObservationTrajectory)
 
 INCLUDE_MISSING  = false
 
@@ -30,12 +29,14 @@ if INCLUDE_MISSING
         #local X 
         X = TX[]   # next, we can push! elements to X
         if i ≤ 10 
+            slope = rand(Uniform(-0.05,0.05))
             for t in 1: T
-                push!(X, SA[-0.05*t + 0.02*randn(), 0.0])
+                push!(X, SA[slope*t + 0.1*randn(), 0.0])
             end
         else
+            slope = rand(Uniform(-0.05,0.05))
             for t in 1: T
-                push!(X, SA[-0.05*t + 0.02*randn(), 1.0])
+                push!(X, SA[slope*t + 0.1*randn(), 1.0])
             end
             X[3] = missing
         end
@@ -78,7 +79,7 @@ else
     end
 end
 
-#### convert the simulated data to a Julia-dataframe
+#### convert the simulated data to a Julia-dataframe suitable for fitting in R's lmest
 out = []
 for i ∈ 1:n
     𝒪 = 𝒪s[i]
@@ -90,13 +91,11 @@ for i ∈ 1:n
     push!(out, hcat(fill(i,ni),1:ni,xx,yy))
 end
 
-
-
 dout = DataFrame(vcat(out...), :auto)
 colnames = ["subject", "time", "x1", "x2", "y1", "y2", "y3", "y4"]
 rename!(dout, colnames)
 
-#CSV.write("testdatalatentmarkov.csv", dout)
+CSV.write("testdatalatentmarkov.csv", dout)
 
 #### Fit with LMest #####
 using RCall

@@ -1,6 +1,8 @@
-wdir = @__DIR__
+packdir = "/Users/frankvandermeulen/.julia/dev/LatentMarkovQuest"
+cd(packdir)
+wdir = joinpath(packdir, "src")#@__DIR__
 cd(wdir)
-outdir= joinpath(wdir, "out")
+#outdir= joinpath(wdir, "out")
 
 using StatsBase, Plots, LinearAlgebra
 using Optim
@@ -25,4 +27,4 @@ const NUM_HIDDENSTATES = 3
 const DIM_COVARIATES = 2
 const DIM_RESPONSE = 4
 
-include("lm_funcs.jl")
+include("lmq_funcs.jl")
