@@ -1,4 +1,6 @@
 ########### An example, where data are generated from the model ####################
+using RCall
+using CSV
 
 # True parameter vector
 γup = [2.0, 0.0]
@@ -18,6 +20,8 @@ T = 50 # nr of times at which we observe
 # generate latent Markov process and observations (returns array of ObservationTrajectory)
 
 INCLUDE_MISSING  = false
+
+Random.seed!(9)
 
 if INCLUDE_MISSING
     TX = Union{Missing, SVector{DIM_COVARIATES,Float64}} # indien er missing vals zijn 
@@ -95,10 +99,13 @@ dout = DataFrame(vcat(out...), :auto)
 colnames = ["subject", "time", "x1", "x2", "y1", "y2", "y3", "y4"]
 rename!(dout, colnames)
 
-CSV.write("testdatalatentmarkov.csv", dout)
+
+#CSV.write(joinpath(packdir,"datasets/generated_testdata.csv"), dout)
+
+dout = CSV.read(joinpath(packdir,"datasets/generated_testdata.csv"),DataFrame)
 
 #### Fit with LMest #####
-using RCall
+
 @rput dout
 R"""
 library(LMest)
@@ -176,13 +183,13 @@ model = logtarget_large(𝒪s);
 #--------------- NUTS sampler -----------------------
 
 sampler =  NUTS() 
-@time chain = sample(model, sampler, MCMCDistributed(), 1000, 3)#; progress=true);
+@time chain = sample(model, sampler, MCMCDistributed(), 1000, 3; progress=true);
 
 # plotting 
 histogram(chain)
-savefig("histograms.pdf")
+savefig(joinpath(packdir,"figs/histograms.pdf"))
 plot(chain)
-savefig("histograms_traces.pdf")
+savefig(joinpath(packdir,"figs/histograms_traces.pdf"))
 
 # extract posterior mean
 θpm = describe(chain)[1].nt.mean
@@ -196,10 +203,21 @@ savefig("histograms_traces.pdf")
 
 Z1symb=[Symbol("Z1[1]"), Symbol("Z1[2]"), Symbol("Z1[3]")]
 plot(chain[Z1symb])
-savefig("Z1s.pdf")
+savefig(joinpath(packdir,"figs/Z1s.pdf"))
+
+plot(
+    traceplot(chain[Z1symb], title="traceplot"),
+    #meanplot(chain[Z1symb], title="meanplot"),
+    density(chain[Z1symb], title="density"),
+    #histogram(chain[Z1symb], title="histogram"),
+    #autocorplot(chain[Z1symb], title="autocorplot"),
+    dpi=300, size=(900, 900))
+
 
 γsymb=[Symbol("γup[1]"), Symbol("γup[2]"), Symbol("γdown[1]"), Symbol("γdown[2]")]
+
 plot(chain[γsymb])
-savefig("gammas.pdf")
+savefig(joinpath(packdir,"figs/gammas.pdf"))
+
 
 #methodswith(MCMCChains.Chains) #to know methods name which we can apply on chain object
