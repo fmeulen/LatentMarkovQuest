@@ -13,18 +13,26 @@ using StatsFuns  # for softmax
 using Random
 using DynamicHMC
 using UnPack
-#using PDMats
 using Turing
 using StatsPlots # required for Turing plots
 using BenchmarkTools
 using StaticArrays
 using NNlib # for softmax
 using DataFrames
+using Parameters
 
 import StatsBase.sample
 
-const NUM_HIDDENSTATES = 3
-const DIM_COVARIATES = 2
-const DIM_RESPONSE = 4
+# const NUM_HIDDENSTATES = 3
+# const DIM_COVARIATES = 2
+# const DIM_RESPONSE = 4
+
+@with_kw struct Pars
+    NUM_HIDDENSTATES::Int = 3
+    DIM_COVARIATES::Int = 2
+    DIM_RESPONSE::Int = 4
+end
+
+p = Pars()
 
 include("lmq_funcs.jl")

@@ -24,8 +24,8 @@ INCLUDE_MISSING  = false
 Random.seed!(9)
 
 if INCLUDE_MISSING
-    TX = Union{Missing, SVector{DIM_COVARIATES,Float64}} # indien er missing vals zijn 
-    TY = Union{Missing, SVector{DIM_RESPONSE, Int64}}
+    TX = Union{Missing, SVector{p.DIM_COVARIATES,Float64}} # indien er missing vals zijn 
+    TY = Union{Missing, SVector{p.DIM_RESPONSE, Int64}}
   
     𝒪s = ObservationTrajectory{TX, TY}[]
     Us =  Vector{Int64}[]
@@ -44,7 +44,7 @@ if INCLUDE_MISSING
             end
             X[3] = missing
         end
-        U, Y =  sample(θ0, X) 
+        U, Y =  sample(θ0, X, p) 
         push!(Us, U)
         YY = TY[]
         push!(YY, missing) 
@@ -54,8 +54,8 @@ if INCLUDE_MISSING
         push!(𝒪s, ObservationTrajectory(X, YY))
     end
 else 
-    TX = SVector{2,Float64}
-    TY = SVector{DIM_RESPONSE, Int64}
+    TX = SVector{p.DIM_COVARIATES,Float64}
+    TY = SVector{p.DIM_RESPONSE, Int64}
 
     𝒪s = ObservationTrajectory{TX, TY}[]
     Us =  Vector{Int64}[]
@@ -73,7 +73,7 @@ else
                 push!(X, SA[slope*t + 0.1*randn(), 1.0])
             end
         end
-        U, Y =  sample(θ0, X) 
+        U, Y =  sample(θ0, X, p) 
         push!(Us, U)
         YY = TY[]
         for t in  1:T
@@ -159,8 +159,8 @@ lmest_fit0[:Piv]
 
 #################### Fitting with Turing.jl ##########################
 
-#model = logtarget(𝒪s);
-model = logtarget_large(𝒪s);
+#model = logtarget(𝒪s, p);
+model = logtarget_large(𝒪s, p);
 
 #--------------- map -----------------------
 @time map_estimate = optimize(model, MAP());

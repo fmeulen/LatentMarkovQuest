@@ -155,3 +155,9 @@ loglik2(𝒪) = (θ) -> loglik2(θ, 𝒪)
 for i in 1:n
     @show hcat(Us[i], viterbi(θ0, 𝒪s[i]))
 end
+
+
+A= MMatrix{4,4,Float64}
+B= Matrix{Float64}(undef,4,4)
+A[1,4] = 5.0
+B[1,4] = 5.0

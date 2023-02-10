@@ -13,17 +13,17 @@ end
 ObservationTrajectory(X, _) = ObservationTrajectory(X, fill(SA[1,1,1,1], length(X)))  # constructor if only X is given
 
 # Prior on root node (x can be inital state)
-Πroot(_) = (@SVector ones(NUM_HIDDENSTATES))/3.0    
+Πroot(_, p) = (@SVector ones(p.NUM_HIDDENSTATES))/p.NUM_HIDDENSTATES    
 
 # transition kernel of the latent chain assuming 3 latent states
 #Ki(θ,x) = [StatsFuns.softmax([0.0, dot(x,θ.γ12), -Inf])' ; StatsFuns.softmax([dot(x,θ.γ21), 0.0, dot(x,θ.γ23)])' ; StatsFuns.softmax([-Inf, dot(x,θ.γ32), 0])']
 # to avoid type instability, both Ki methods should return an element of the same type 
 # slightly faster, though almost double allocation
 
-Ki(θ,x)= SMatrix{NUM_HIDDENSTATES,NUM_HIDDENSTATES}( 
+Ki(θ,x,p)= SMatrix{p.NUM_HIDDENSTATES,p.NUM_HIDDENSTATES}( 
     NNlib.softmax([0.0 dot(x,θ.γ12) -Inf64; dot(x,θ.γ21) 0.0 dot(x,θ.γ23) ; -Inf64 dot(x,θ.γ32) 0.0];dims=2) ) 
     
-Ki(_,::Missing) = SMatrix{NUM_HIDDENSTATES,NUM_HIDDENSTATES}(1.0I)
+Ki(_,::Missing,p) = SMatrix{p.NUM_HIDDENSTATES,p.NUM_HIDDENSTATES}(1.0I)
  
 scaledandshifted_logistic(x) = 2.0logistic(x) -1.0 # function that maps [0,∞) to [0,1)
 
@@ -63,10 +63,10 @@ function response(Z)
         SA[ one(λ[1])-λ[1] λ[1];  one(λ[2])-λ[2] λ[2];  one(λ[3])-λ[3] λ[3]]
 end
 
-# function response(Z::Vector{T}) where T  # slightly slower, but generic
+# function response(Z::Vector{T},p) where T  # slightly slower, but generic
 #     λ = mapZtoλ(Z)
-#     v1 = SVector{NUM_HIDDENSTATES,T}(λ)
-#     v2 = SVector{NUM_HIDDENSTATES,T}(one(T) .- λ)
+#     v1 = SVector{p.NUM_HIDDENSTATES,T}(λ)
+#     v2 = SVector{p.NUM_HIDDENSTATES,T}(one(T) .- λ)
 #     hcat(v2, v1)
 # end
 
@@ -89,12 +89,12 @@ sample_observation(Λ, u) =  SA[sample(Weights(Λ[1][u,:])), sample(Weights(Λ[2
     (thus, last element of X are not used)
 
 """
-function sample(θ, X)            # Generate exact track + observations
+function sample(θ, X, p)            # Generate exact track + observations
     Λ = Λi(θ)
-    uprev = sample(Weights(Πroot(X[1])))                  # sample u1 (possibly depending on X[1])
+    uprev = sample(Weights(Πroot(X[1],p)))                  # sample u1 (possibly depending on X[1])
     U = [uprev]
     for i in eachindex(X[2:end])
-        u = sample(Weights(Ki(θ,X[i])[uprev,:]))         # Generate sample from previous state
+        u = sample(Weights(Ki(θ,X[i],p)[uprev,:]))         # Generate sample from previous state
         push!(U, copy(u))
         uprev = u
     end
@@ -110,19 +110,21 @@ h_from_one_observation(Λ, i::Int) = Λ[:,i]
 
     returns message sent by observation y, when the parameter vector is θ
 """
-function h_from_observation(θ, y) 
+function h_from_observation(θ, y, _) 
     Λ = Λi(θ)
-    # a1 = [Λ[i][:,y[i]] for i in eachindex(y)]  # only those indices where y is not missing, for an index where it is missing we can just send [1;1;1;1], or simply define y as such in case of missingness
-    # out = [prod(first.(a1))]
-    # K = length(a1[1])
-    # for k in 2:K
-    #     push!(out,prod(getindex.(a1,k)) )
-    # end
-    # out
     h_from_one_observation(Λ[1],y[1]) .* h_from_one_observation(Λ[2],y[2]) .* h_from_one_observation(Λ[3],y[3]) .* h_from_one_observation(Λ[4],y[4])
 end
 
-h_from_observation(_, ::Missing) =  @SVector ones(NUM_HIDDENSTATES)
+# above one is twice faster and allocates half, the one below is generic
+# function h_from_observation(θ, y, p) 
+#     Λ = Λi(θ)
+#     a1 = [h_from_one_observation(Λ[i],y[i]) for i in eachindex(y)] 
+#     SA[[prod(getindex.(a1,k)) for k in 1:p.NUM_HIDDENSTATES]...]
+# end
+
+
+
+h_from_observation(_, ::Missing,p) =  @SVector ones(p.NUM_HIDDENSTATES)
 
 
 """
@@ -142,21 +144,21 @@ end
 
     Compute loglikelihood and h-vectors from the backward information filter, for one ObservationTrajectory
 """
-function loglik_and_bif(θ, 𝒪::ObservationTrajectory)
+function loglik_and_bif(θ, 𝒪::ObservationTrajectory,p)
     @unpack X, Y = 𝒪
     N = length(Y) 
-    h = h_from_observation(θ, Y[N])
+    h = h_from_observation(θ, Y[N], p)
     H = [h]
     loglik = zero(θ[1][1])
     for i in N:-1:2
-        h = pullback(θ, X[i], h) .* h_from_observation(θ, Y[i-1])
+        h = pullback(θ, X[i], h) .* h_from_observation(θ, Y[i-1], p)
 #        c = normalise!(h)
         h, c = normalise(h)
         loglik += c
         pushfirst!(H, copy(ForwardDiff.value.(h)))
         #hprev = h
     end
-    loglik += log(dot(h, Πroot(X[1])))
+    loglik += log(dot(h, Πroot(X[1], p)))
     (ll=loglik, H=H)          
 end
 
@@ -165,18 +167,18 @@ end
 
     Returns loglikelihood at θ for one ObservationTrajectory
 """    
-function loglik(θ, 𝒪::ObservationTrajectory) 
+function loglik(θ, 𝒪::ObservationTrajectory, p) 
     @unpack X, Y = 𝒪
     N = length(Y) 
-    h = h_from_observation(θ, Y[N])
+    h = h_from_observation(θ, Y[N], p)
     loglik = zero(θ[1][1])
     for i in N:-1:2
-        h = pullback(θ, X[i], h) .* h_from_observation(θ, Y[i-1])
+        h = pullback(θ, X[i], h) .* h_from_observation(θ, Y[i-1], p)
         #c = normalise!(h)
         h, c = normalise(h)
         loglik += c
     end
-    loglik + log(dot(h, Πroot(X[1])))
+    loglik + log(dot(h, Πroot(X[1],p)))
 end
 
 
@@ -185,26 +187,26 @@ end
 
     Returns loglikelihood at θ for multplies ObservationTrajectories
 """    
-function loglik(θ, 𝒪s::Vector)
+function loglik(θ, 𝒪s::Vector, p)
     ll = zero(θ[1][1])
     for i ∈ eachindex(𝒪s)
-        ll += loglik(θ, 𝒪s[i])
+        ll += loglik(θ, 𝒪s[i], p)
     end
     ll 
 end
 
-loglik(𝒪) = (θ) -> loglik(θ, 𝒪) 
+loglik(𝒪, p) = (θ) -> loglik(θ, 𝒪, p) 
 
-∇loglik(𝒪) = (θ) -> ForwardDiff.gradient(loglik(𝒪), θ)
+∇loglik(𝒪, p) = (θ) -> ForwardDiff.gradient(loglik(𝒪), θ, p)
 
 # check
-function sample_guided(θ, 𝒪, H)# Generate approximate track
+function sample_guided(θ, 𝒪, H, p)# Generate approximate track
     X = 𝒪.X
     N = length(H) # check -1?
-    uprev = sample(Weights(Πroot(X[1]) .* H[1])) # Weighted prior distribution
+    uprev = sample(Weights(Πroot(X[1], p) .* H[1])) # Weighted prior distribution
     uᵒ = [uprev]
     for i=2:N
-        w = Ki(θ,X[i])[uprev,:] .* H[i]         # Weighted transition density
+        w = Ki(θ,X[i], p)[uprev,:] .* H[i]         # Weighted transition density
         u = sample(Weights(w))
         push!(uᵒ, u)
         uprev = u
@@ -218,15 +220,16 @@ function unitvec(k,K)
     SVector{K}(ee)
 end
 
-function viterbi(θ, 𝒪::ObservationTrajectory) 
+function viterbi(θ, 𝒪::ObservationTrajectory, p) 
+    @unpack NUM_HIDDENSTATES = p
     @unpack X, Y = 𝒪
     N = length(Y) 
-    h = h_from_observation(θ, Y[N])
+    h = h_from_observation(θ, Y[N], p)
     mls = [argmax(h)]  # m(ost) l(ikely) s(tate)
     h = unitvec(mls[1], NUM_HIDDENSTATES)
     #loglik = zero(θ[1][1])
     for i in N:-1:2
-        h = pullback(θ, X[i], h) .* h_from_observation(θ, Y[i-1])
+        h = pullback(θ, X[i], h) .* h_from_observation(θ, Y[i-1], p)
         #c = normalise!(h)
         pushfirst!(mls, argmax(h))
         h = unitvec(mls[1], NUM_HIDDENSTATES)
@@ -240,23 +243,26 @@ end
 ############ use of Turing to sample from the posterior ################
 
 # model with λvector the same for all questions (less parameters)
-@model function logtarget(𝒪s)
-    γup ~ filldist(Normal(0,5), DIM_COVARIATES)#MvNormal(fill(0.0, 2), 2.0 * I)
-    γdown ~ filldist(Normal(0,5), DIM_COVARIATES)  #MvNormal(fill(0.0, 2), 2.0 * I)
-    Z0 ~ filldist(Exponential(), NUM_HIDDENSTATES) 
-    Turing.@addlogprob! loglik(ComponentArray(γ12 = γup, γ21 = γdown, γ23 = γup, γ32 = γdown, Z1=Z0, Z2=Z0, Z3=Z0, Z4=Z0), 𝒪s)
+@model function logtarget(𝒪s, p)
+    γup ~ filldist(Normal(0,5), p.DIM_COVARIATES)#MvNormal(fill(0.0, 2), 2.0 * I)
+    γdown ~ filldist(Normal(0,5), p.DIM_COVARIATES)  #MvNormal(fill(0.0, 2), 2.0 * I)
+    Z0 ~ filldist(Exponential(), p.NUM_HIDDENSTATES) 
+    Turing.@addlogprob! loglik(ComponentArray(γ12 = γup, γ21 = γdown, γ23 = γup, γ32 = γdown, Z1=Z0, Z2=Z0, Z3=Z0, Z4=Z0), 𝒪s, p)
 end
 
-@model function logtarget_large(𝒪s)
-    γup ~ filldist(Normal(0,5), DIM_COVARIATES)#MvNormal(fill(0.0, 2), 2.0 * I)
-    γdown ~ filldist(Normal(0,5), DIM_COVARIATES)  #MvNormal(fill(0.0, 2), 2.0 * I)
+@model function logtarget_large(𝒪s, p)
+    γup ~ filldist(Normal(0,5), p.DIM_COVARIATES)#MvNormal(fill(0.0, 2), 2.0 * I)
+    γdown ~ filldist(Normal(0,5), p.DIM_COVARIATES)  #MvNormal(fill(0.0, 2), 2.0 * I)
     
-    Z1 ~ filldist(Exponential(), NUM_HIDDENSTATES) 
-    Z2 ~ filldist(Exponential(), NUM_HIDDENSTATES) 
-    Z3 ~ filldist(Exponential(), NUM_HIDDENSTATES) 
-    Z4 ~ filldist(Exponential(), NUM_HIDDENSTATES) 
-    Turing.@addlogprob! loglik(ComponentArray(γ12 = γup, γ21 = γdown, γ23 = γup, γ32 = γdown, Z1=Z1, Z2=Z2, Z3=Z3, Z4=Z4), 𝒪s)
+    Z1 ~ filldist(Exponential(), p.NUM_HIDDENSTATES) 
+    Z2 ~ filldist(Exponential(), p.NUM_HIDDENSTATES) 
+    Z3 ~ filldist(Exponential(), p.NUM_HIDDENSTATES) 
+    Z4 ~ filldist(Exponential(), p.NUM_HIDDENSTATES) 
+    Turing.@addlogprob! loglik(ComponentArray(γ12 = γup, γ21 = γdown, γ23 = γup, γ32 = γdown, Z1=Z1, Z2=Z2, Z3=Z3, Z4=Z4), 𝒪s, p)
 end
+
+
+
 
 mapallZtoλ(θ) = hcat(mapZtoλ(θ.Z1), mapZtoλ(θ.Z2), mapZtoλ(θ.Z3), mapZtoλ(θ.Z4))
 
