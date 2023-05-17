@@ -3,8 +3,8 @@ using RCall
 using CSV
 
 # True parameter vector
-γup = [2.0, 0.0]
-γdown = [-0.5, -0.5]
+γup = [0.3, 2.0, 0.0]
+γdown = [-0.4, -0.5, -0.5]
 Z1 = [0.5, 1.0, 1.5]
 Z2 = [0.5, 1.0, 1.5]
 Z3 = [0.2, 1.0, 2.5]
@@ -35,12 +35,12 @@ if INCLUDE_MISSING
         if i ≤ 10 
             slope = rand(Uniform(-0.05,0.05))
             for t in 1: T
-                push!(X, SA[slope*t + 0.1*randn(), 0.0])
+                push!(X, SA[1.0, slope*t + 0.1*randn(), 0.0])
             end
         else
             slope = rand(Uniform(-0.05,0.05))
             for t in 1: T
-                push!(X, SA[slope*t + 0.1*randn(), 1.0])
+                push!(X, SA[1.0, slope*t + 0.1*randn(), 1.0])
             end
             X[3] = missing
         end
@@ -65,12 +65,12 @@ else
         if i ≤ 10 
             slope = rand(Uniform(-0.05,0.05))
             for t in 1: T
-                push!(X, SA[slope*t + 0.1*randn(), 0.0])
+                push!(X, SA[1.0, slope*t + 0.1*randn(), 0.0])
             end
         else
             slope = rand(Uniform(-0.05,0.05))
             for t in 1: T
-                push!(X, SA[slope*t + 0.1*randn(), 1.0])
+                push!(X, SA[1.0, slope*t + 0.1*randn(), 1.0])
             end
         end
         U, Y =  sample(θ0, X, p) 
@@ -96,7 +96,7 @@ for i ∈ 1:n
 end
 
 dout = DataFrame(vcat(out...), :auto)
-colnames = ["subject", "time", "x1", "x2", "y1", "y2", "y3", "y4"]
+colnames = ["subject", "time", "x1", "x2","x3", "y1", "y2", "y3", "y4"]
 rename!(dout, colnames)
 
 
@@ -113,9 +113,9 @@ library(LMest)
 #require(LMest)
 dt <- lmestData(data = dout, id = "subject", time="time")
 
-lmestF <- lmestFormula(data=dout, response=5:8, 
+lmestF <- lmestFormula(data=dout, response=6:9, 
                         LatentInitial=NULL, 
-                        LatentTransition=3:4,
+                        LatentTransition=3:5,
                         AddInterceptInitial = FALSE,
                         AddInterceptTransition = FALSE)
 
@@ -144,6 +144,8 @@ out0 = lmest(responsesFormula= lmestF$responsesFormula,
 # gammas = out1$Ga
 """
 
+# important: in LMest output, the Psi is related to our lambdas (conditional respondse probabilities)
+# the Ga is related to our gammas (parameters affecting the logit for the transition probabilities)
 lmest_fit0 = @rget out0
 #lmest_fit1 = @rget out1
 
@@ -193,7 +195,11 @@ savefig(joinpath(packdir,"figs/histograms_traces.pdf"))
 
 # extract posterior mean
 θpm = describe(chain)[1].nt.mean
-θpm = ComponentArray(γ12=θpm[1:2], γ21=θpm[3:4], Z1=θpm[5:7], Z2=θpm[8:10],Z3=θpm[11:13],Z4=θpm[14:16])
+pDC = p.DIM_COVARIATES
+pNHS = p.NUM_HIDDENSTATES
+θpm = ComponentArray(γ12=θpm[1:pDC], γ21=θpm[pDC+1:2pDC], Z1=θpm[2pDC+1:3pDC], 
+                    Z2=θpm[(3pDC+1):(3pDC+pNHS)],Z3=θpm[(3pDC+pNHS+1):(3pDC+2pNHS)],Z4=θpm[(3pDC+2pNHS+1):(3pDC+3pNHS)])
+
 
 @show mapallZtoλ(θpm)'
 @show mapallZtoλ(θ0)'
@@ -221,3 +227,18 @@ savefig(joinpath(packdir,"figs/gammas.pdf"))
 
 
 #methodswith(MCMCChains.Chains) #to know methods name which we can apply on chain object
+
+
+# compare LMest and this implementation (posterior mean)
+
+# λs
+@show mapallZtoλ(θ0)'
+@show [lmest_fit0[:Psi][:,:,1][2,:],lmest_fit0[:Psi][:,:,2][2,:],lmest_fit0[:Psi][:,:,3][2,:],lmest_fit0[:Psi][:,:,4][2,:]]
+@show mapallZtoλ(θpm)'
+
+# γs
+@show θ0[:γ12], θpm[:γ12]
+@show θ0[:γ21], θpm[:γ21]
+lmest_fit0[:Ga]
+
+lmest_fit0[:Piv]

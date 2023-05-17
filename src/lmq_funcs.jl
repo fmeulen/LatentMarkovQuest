@@ -250,6 +250,7 @@ end
     Turing.@addlogprob! loglik(ComponentArray(γ12 = γup, γ21 = γdown, γ23 = γup, γ32 = γdown, Z1=Z0, Z2=Z0, Z3=Z0, Z4=Z0), 𝒪s, p)
 end
 
+# model with unequal λvector for questions (less parameters)
 @model function logtarget_large(𝒪s, p)
     γup ~ filldist(Normal(0,5), p.DIM_COVARIATES)#MvNormal(fill(0.0, 2), 2.0 * I)
     γdown ~ filldist(Normal(0,5), p.DIM_COVARIATES)  #MvNormal(fill(0.0, 2), 2.0 * I)
@@ -261,6 +262,21 @@ end
     Turing.@addlogprob! loglik(ComponentArray(γ12 = γup, γ21 = γdown, γ23 = γup, γ32 = γdown, Z1=Z1, Z2=Z2, Z3=Z3, Z4=Z4), 𝒪s, p)
 end
 
+# now with different gammas
+@model function logtarget_large(𝒪s, p)
+    γ12 ~ filldist(Normal(0,5), p.DIM_COVARIATES)#MvNormal(fill(0.0, 2), 2.0 * I)
+    γ13 ~ filldist(Normal(0,5), p.DIM_COVARIATES)#MvNormal(fill(0.0, 2), 2.0 * I)
+    γ21 ~ filldist(Normal(0,5), p.DIM_COVARIATES)  #MvNormal(fill(0.0, 2), 2.0 * I)
+    γ23 ~ filldist(Normal(0,5), p.DIM_COVARIATES)  #MvNormal(fill(0.0, 2), 2.0 * I)
+    γ31 ~ filldist(Normal(0,5), p.DIM_COVARIATES)  #MvNormal(fill(0.0, 2), 2.0 * I)
+    γ32 ~ filldist(Normal(0,5), p.DIM_COVARIATES)  #MvNormal(fill(0.0, 2), 2.0 * I)
+
+    Z1 ~ filldist(Exponential(), p.NUM_HIDDENSTATES) 
+    Z2 ~ filldist(Exponential(), p.NUM_HIDDENSTATES) 
+    Z3 ~ filldist(Exponential(), p.NUM_HIDDENSTATES) 
+    Z4 ~ filldist(Exponential(), p.NUM_HIDDENSTATES) 
+    Turing.@addlogprob! loglik(ComponentArray(γ12 = γ12, γ13 = γ13, γ21 = γ21, γ23 = γ23, γ31 = γ31, γ32 = γ32, Z1=Z1, Z2=Z2, Z3=Z3, Z4=Z4), 𝒪s, p)
+end
 
 
 
@@ -275,10 +291,10 @@ mapallZtoλ(θ) = hcat(mapZtoλ(θ.Z1), mapZtoλ(θ.Z2), mapZtoλ(θ.Z3), mapZto
     map_estimate = optimize(model, MAP())
     convert_turingoutput(map_estimate)
 """
-function convert_turingoutput(optimised_model)
+function convert_turingoutput(optimised_model)  # function is not yet adapted to p
     θ =  optimised_model.values
-    ComponentArray(γ12=[θ[Symbol("γup[1]")], θ[Symbol("γup[2]")]],
-                      γ21=[θ[Symbol("γdown[1]")], θ[Symbol("γdown[2]")]],
+    ComponentArray(γ12=[θ[Symbol("γup[1]")], θ[Symbol("γup[2]")], θ[Symbol("γup[3]")]],
+                      γ21=[θ[Symbol("γdown[1]")], θ[Symbol("γdown[2]")], θ[Symbol("γdown[3]")]],
                       Z1=[θ[Symbol("Z1[1]")], θ[Symbol("Z1[2]")], θ[Symbol("Z1[3]")]],
                       Z2=[θ[Symbol("Z2[1]")], θ[Symbol("Z2[2]")], θ[Symbol("Z2[3]")]],
                       Z3=[θ[Symbol("Z3[1]")], θ[Symbol("Z3[2]")], θ[Symbol("Z3[3]")]],

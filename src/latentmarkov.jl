@@ -29,7 +29,7 @@ import StatsBase.sample
 
 @with_kw struct Pars
     NUM_HIDDENSTATES::Int = 3
-    DIM_COVARIATES::Int = 2
+    DIM_COVARIATES::Int = 3 # include intercept
     DIM_RESPONSE::Int = 4
 end
 

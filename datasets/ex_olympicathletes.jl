@@ -35,3 +35,17 @@ for i ∈ 1:n
     push!(𝒪s, ObservationTrajectory(X,Y))
 end    
 
+model = logtarget_large(𝒪s, p);
+
+#--------------- map -----------------------
+@time map_estimate = optimize(model, MAP());
+
+θmap = convert_turingoutput(map_estimate);
+
+@show mapallZtoλ(θmap)'
+
+sampler =  NUTS() 
+@time chain = sample(model, sampler, MCMCDistributed(), 1000, 3; progress=true);
+plot(chain)
+
+savefig(joinpath(packdir,"figs/olympic_histograms_traces.pdf"))
