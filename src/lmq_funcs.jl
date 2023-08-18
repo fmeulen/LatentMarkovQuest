@@ -20,19 +20,38 @@ ObservationTrajectory(X, _) = ObservationTrajectory(X, fill(SA[1,1,1,1], length(
 # to avoid type instability, both Ki methods should return an element of the same type 
 # slightly faster, though almost double allocation
 
-Ki(θ,x,p)= SMatrix{p.NUM_HIDDENSTATES,p.NUM_HIDDENSTATES}( 
+abstract type Model end
+struct Restricted <: Model end  # transition matrix is tridiagonal
+struct Unrestricted <: Model end # transition matrix is full
+
+Ki(θ,x,p, ::Unrestricted)= SMatrix{p.NUM_HIDDENSTATES,p.NUM_HIDDENSTATES}( 
+    NNlib.softmax([0.0 dot(x,θ.γ12) dot(x,θ.γ13); dot(x,θ.γ21) 0.0 dot(x,θ.γ23) ; dot(x,θ.γ31) dot(x,θ.γ32) 0.0];dims=2) ) 
+Ki(_,::Missing,p, ::Unrestricted) = SMatrix{p.NUM_HIDDENSTATES,p.NUM_HIDDENSTATES}(1.0I)
+
+Ki(θ,x,p, ::Restricted)= SMatrix{p.NUM_HIDDENSTATES,p.NUM_HIDDENSTATES}( 
     NNlib.softmax([0.0 dot(x,θ.γ12) -Inf64; dot(x,θ.γ21) 0.0 dot(x,θ.γ23) ; -Inf64 dot(x,θ.γ32) 0.0];dims=2) ) 
-    
-Ki(_,::Missing,p) = SMatrix{p.NUM_HIDDENSTATES,p.NUM_HIDDENSTATES}(1.0I)
- 
-scaledandshifted_logistic(x) = 2.0logistic(x) -1.0 # function that maps [0,∞) to [0,1)
+Ki(_,::Missing,p, ::Restricted) = SMatrix{p.NUM_HIDDENSTATES,p.NUM_HIDDENSTATES}(1.0I)
+
+    scaledandshifted_logistic(x) = 2.0logistic(x) -1.0 # function that maps [0,∞) to [0,1)
 
 """
     pullback(θ,x,h)  
         
     returns  Ki(θ,x)*h
 """
-function pullback(θ,x,h) 
+function pullback(θ,x,h,::Unrestricted) 
+    a1 = dot(StatsFuns.softmax(SA[0.0, dot(x,θ.γ12), dot(x,θ.γ13)]),h)
+    a2 = dot(StatsFuns.softmax(SA[dot(x,θ.γ21), 0.0 ,dot(x,θ.γ23)]),h)
+    a3 = dot(StatsFuns.softmax(SA[dot(x,θ.γ31), dot(x,θ.γ32), 0.0]),h)
+    SA[a1,a2,a3]
+end
+
+"""
+    pullback(θ,x,h)  
+        
+    returns  Ki(θ,x)*h
+"""
+function pullback(θ,x,h,::Restricted) 
     a1 = dot(StatsFuns.softmax(SA[0.0, dot(x,θ.γ12), -Inf64]),h)
     a2 = dot(StatsFuns.softmax(SA[dot(x,θ.γ21), 0.0 ,dot(x,θ.γ23)]),h)
     a3 = dot(StatsFuns.softmax(SA[-Inf64, dot(x,θ.γ32), 0.0]),h)
@@ -45,8 +64,8 @@ end
     returns pullback in case covariates are missing
     as we assume no state change in this case, this simply returns h
 """
-pullback(_, ::Missing, h) = h
-
+pullback(_, ::Missing, h, ::Restricted) = h
+pullback(_, ::Missing, h, ::Unrestricted) = h
 
 mapZtoλ(x) = scaledandshifted_logistic.(cumsum(x))
 
@@ -89,12 +108,12 @@ sample_observation(Λ, u) =  SA[sample(Weights(Λ[1][u,:])), sample(Weights(Λ[2
     (thus, last element of X are not used)
 
 """
-function sample(θ, X, p)            # Generate exact track + observations
+function sample(θ, X, p, ℳ)            # Generate exact track + observations
     Λ = Λi(θ)
     uprev = sample(Weights(Πroot(X[1],p)))                  # sample u1 (possibly depending on X[1])
     U = [uprev]
     for i in eachindex(X[2:end])
-        u = sample(Weights(Ki(θ,X[i],p)[uprev,:]))         # Generate sample from previous state
+        u = sample(Weights(Ki(θ,X[i],p, ℳ)[uprev,:]))         # Generate sample from previous state
         push!(U, copy(u))
         uprev = u
     end
@@ -144,14 +163,14 @@ end
 
     Compute loglikelihood and h-vectors from the backward information filter, for one ObservationTrajectory
 """
-function loglik_and_bif(θ, 𝒪::ObservationTrajectory,p)
+function loglik_and_bif(θ, 𝒪::ObservationTrajectory,p, ℳ)
     @unpack X, Y = 𝒪
     N = length(Y) 
     h = h_from_observation(θ, Y[N], p)
     H = [h]
     loglik = zero(θ[1][1])
     for i in N:-1:2
-        h = pullback(θ, X[i], h) .* h_from_observation(θ, Y[i-1], p)
+        h = pullback(θ, X[i], h, ℳ) .* h_from_observation(θ, Y[i-1], p)
 #        c = normalise!(h)
         h, c = normalise(h)
         loglik += c
@@ -167,13 +186,13 @@ end
 
     Returns loglikelihood at θ for one ObservationTrajectory
 """    
-function loglik(θ, 𝒪::ObservationTrajectory, p) 
+function loglik(θ, 𝒪::ObservationTrajectory, p, ℳ) 
     @unpack X, Y = 𝒪
     N = length(Y) 
     h = h_from_observation(θ, Y[N], p)
     loglik = zero(θ[1][1])
     for i in N:-1:2
-        h = pullback(θ, X[i], h) .* h_from_observation(θ, Y[i-1], p)
+        h = pullback(θ, X[i], h, ℳ) .* h_from_observation(θ, Y[i-1], p)
         #c = normalise!(h)
         h, c = normalise(h)
         loglik += c
@@ -187,26 +206,26 @@ end
 
     Returns loglikelihood at θ for multplies ObservationTrajectories
 """    
-function loglik(θ, 𝒪s::Vector, p)
+function loglik(θ, 𝒪s::Vector, p, ℳ)
     ll = zero(θ[1][1])
     for i ∈ eachindex(𝒪s)
-        ll += loglik(θ, 𝒪s[i], p)
+        ll += loglik(θ, 𝒪s[i], p, ℳ)
     end
     ll 
 end
 
-loglik(𝒪, p) = (θ) -> loglik(θ, 𝒪, p) 
+loglik(𝒪, p, ℳ) = (θ) -> loglik(θ, 𝒪, p, ℳ) 
 
-∇loglik(𝒪, p) = (θ) -> ForwardDiff.gradient(loglik(𝒪), θ, p)
+∇loglik(𝒪, p, ℳ) = (θ) -> ForwardDiff.gradient(loglik(𝒪, p, ℳ), θ)
 
 # check
-function sample_guided(θ, 𝒪, H, p)# Generate approximate track
+function sample_guided(θ, 𝒪, H, p, ℳ)# Generate approximate track
     X = 𝒪.X
     N = length(H) # check -1?
     uprev = sample(Weights(Πroot(X[1], p) .* H[1])) # Weighted prior distribution
     uᵒ = [uprev]
     for i=2:N
-        w = Ki(θ,X[i], p)[uprev,:] .* H[i]         # Weighted transition density
+        w = Ki(θ,X[i], p, ℳ)[uprev,:] .* H[i]         # Weighted transition density
         u = sample(Weights(w))
         push!(uᵒ, u)
         uprev = u
@@ -220,7 +239,7 @@ function unitvec(k,K)
     SVector{K}(ee)
 end
 
-function viterbi(θ, 𝒪::ObservationTrajectory, p) 
+function viterbi(θ, 𝒪::ObservationTrajectory, p, ℳ) 
     @unpack NUM_HIDDENSTATES = p
     @unpack X, Y = 𝒪
     N = length(Y) 
@@ -229,7 +248,7 @@ function viterbi(θ, 𝒪::ObservationTrajectory, p)
     h = unitvec(mls[1], NUM_HIDDENSTATES)
     #loglik = zero(θ[1][1])
     for i in N:-1:2
-        h = pullback(θ, X[i], h) .* h_from_observation(θ, Y[i-1], p)
+        h = pullback(θ, X[i], h, ℳ) .* h_from_observation(θ, Y[i-1], p)
         #c = normalise!(h)
         pushfirst!(mls, argmax(h))
         h = unitvec(mls[1], NUM_HIDDENSTATES)
@@ -247,7 +266,11 @@ end
     γup ~ filldist(Normal(0,5), p.DIM_COVARIATES)#MvNormal(fill(0.0, 2), 2.0 * I)
     γdown ~ filldist(Normal(0,5), p.DIM_COVARIATES)  #MvNormal(fill(0.0, 2), 2.0 * I)
     Z0 ~ filldist(Exponential(), p.NUM_HIDDENSTATES) 
-    Turing.@addlogprob! loglik(ComponentArray(γ12 = γup, γ21 = γdown, γ23 = γup, γ32 = γdown, Z1=Z0, Z2=Z0, Z3=Z0, Z4=Z0), 𝒪s, p)
+    Turing.@addlogprob! loglik(ComponentArray(γ12 = γup, γ13 = 0.0,
+        γ21 = γdown, γ23 = γup, 
+        γ32 = γdown, γ31 = 0.0,
+        Z1=Z0, Z2=Z0, Z3=Z0, Z4=Z0), 𝒪s, p, Restricted())
+
 end
 
 # model with unequal λvector for questions (less parameters)
@@ -259,11 +282,14 @@ end
     Z2 ~ filldist(Exponential(), p.NUM_HIDDENSTATES) 
     Z3 ~ filldist(Exponential(), p.NUM_HIDDENSTATES) 
     Z4 ~ filldist(Exponential(), p.NUM_HIDDENSTATES) 
-    Turing.@addlogprob! loglik(ComponentArray(γ12 = γup, γ21 = γdown, γ23 = γup, γ32 = γdown, Z1=Z1, Z2=Z2, Z3=Z3, Z4=Z4), 𝒪s, p)
+    Turing.@addlogprob! loglik(ComponentArray(γ12 = γup, γ13 = 0.0,
+                                              γ21 = γdown, γ23 = γup, 
+                                              γ32 = γdown, γ31 = 0.0,
+                                              Z1=Z1, Z2=Z2, Z3=Z3, Z4=Z4), 𝒪s, p, Restricted())
 end
 
 # now with different gammas
-@model function logtarget_large(𝒪s, p)
+@model function logtarget_large_unrestricted(𝒪s, p)
     γ12 ~ filldist(Normal(0,5), p.DIM_COVARIATES)#MvNormal(fill(0.0, 2), 2.0 * I)
     γ13 ~ filldist(Normal(0,5), p.DIM_COVARIATES)#MvNormal(fill(0.0, 2), 2.0 * I)
     γ21 ~ filldist(Normal(0,5), p.DIM_COVARIATES)  #MvNormal(fill(0.0, 2), 2.0 * I)
@@ -275,7 +301,11 @@ end
     Z2 ~ filldist(Exponential(), p.NUM_HIDDENSTATES) 
     Z3 ~ filldist(Exponential(), p.NUM_HIDDENSTATES) 
     Z4 ~ filldist(Exponential(), p.NUM_HIDDENSTATES) 
-    Turing.@addlogprob! loglik(ComponentArray(γ12 = γ12, γ13 = γ13, γ21 = γ21, γ23 = γ23, γ31 = γ31, γ32 = γ32, Z1=Z1, Z2=Z2, Z3=Z3, Z4=Z4), 𝒪s, p)
+    Turing.@addlogprob! loglik(ComponentArray(γ12 = γ13, γ13 = γ13,
+                                              γ21 = γ21, γ23 = γ23, 
+                                              γ32 = γ32, γ31 = γ31, 
+                                              Z1=Z1, Z2=Z2, Z3=Z3, Z4=Z4), 𝒪s, p, Unrestricted())
+
 end
 
 

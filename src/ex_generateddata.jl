@@ -9,7 +9,10 @@ Z1 = [0.5, 1.0, 1.5]
 Z2 = [0.5, 1.0, 1.5]
 Z3 = [0.2, 1.0, 2.5]
 Z4 = [0.5, 1.0, 1.5]
-θ0 = ComponentArray(γ12 = γup, γ21 = γdown, γ23 = γup, γ32 = γdown, Z1=Z1, Z2=Z2, Z3=Z3, Z4=Z4)
+θ0 = ComponentArray(γ12 = γup, γ13=fill(-Inf64, p.NUM_HIDDENSTATES) , 
+                    γ21 = γdown, γ23 = γup, 
+                    γ31=fill(-Inf64, p.NUM_HIDDENSTATES), γ32 = γdown, 
+                    Z1=Z1, Z2=Z2, Z3=Z3, Z4=Z4)
 
 println("true vals", "  ", γup,"  ", γdown,"  ", Z1, Z2, Z3, Z4)
 
@@ -20,6 +23,7 @@ T = 50 # nr of times at which we observe
 # generate latent Markov process and observations (returns array of ObservationTrajectory)
 
 INCLUDE_MISSING  = false
+ℳ = Unrestricted()
 
 Random.seed!(9)
 
@@ -44,7 +48,7 @@ if INCLUDE_MISSING
             end
             X[3] = missing
         end
-        U, Y =  sample(θ0, X, p) 
+        U, Y =  sample(θ0, X, p, ℳ) 
         push!(Us, U)
         YY = TY[]
         push!(YY, missing) 
@@ -73,7 +77,7 @@ else
                 push!(X, SA[1.0, slope*t + 0.1*randn(), 1.0])
             end
         end
-        U, Y =  sample(θ0, X, p) 
+        U, Y =  sample(θ0, X, p, ℳ) 
         push!(Us, U)
         YY = TY[]
         for t in  1:T
@@ -100,7 +104,7 @@ colnames = ["subject", "time", "x1", "x2","x3", "y1", "y2", "y3", "y4"]
 rename!(dout, colnames)
 
 
-#CSV.write(joinpath(packdir,"datasets/generated_testdata.csv"), dout)
+CSV.write(joinpath(packdir,"datasets/generated_testdata.csv"), dout)
 
 dout = CSV.read(joinpath(packdir,"datasets/generated_testdata.csv"),DataFrame)
 
@@ -163,7 +167,7 @@ lmest_fit0[:Piv]
 
 #model = logtarget(𝒪s, p);
 model = logtarget_large(𝒪s, p);
-
+model = logtarget_large_unrestricted(𝒪s, p);
 #--------------- map -----------------------
 @time map_estimate = optimize(model, MAP());
 θmap = convert_turingoutput(map_estimate);
