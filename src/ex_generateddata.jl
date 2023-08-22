@@ -5,11 +5,16 @@ using CSV
 # True parameter vector
 γup = [0.3, 2.0, 0.0]
 γdown = [-0.4, -0.5, -0.5]
+
 Z1 = [0.5, 1.0, 1.5]
 Z2 = [0.5, 1.0, 1.5]
 Z3 = [0.2, 1.0, 2.5]
 Z4 = [0.5, 1.0, 1.5]
-θ0 = ComponentArray(γ12 = γup, γ21 = γdown, γ23 = γup, γ32 = γdown, Z1=Z1, Z2=Z2, Z3=Z3, Z4=Z4)
+
+Z = [0.5, 1.0, 1.5]
+
+θ0 = ComponentArray(γ12 = γup, γ21 = γdown, γ23 = γup, γ32 = γdown, Z1=Z, Z2=Z, Z3=Z, Z4=Z)
+#θ0 = ComponentArray(γ12 = γup, γ21 = γdown, γ23 = γup, γ32 = γdown, Z1=Z1, Z2=Z2, Z3=Z3, Z4=Z4)
 
 println("true vals", "  ", γup,"  ", γdown,"  ", Z1, Z2, Z3, Z4)
 
@@ -100,7 +105,7 @@ colnames = ["subject", "time", "x1", "x2","x3", "y1", "y2", "y3", "y4"]
 rename!(dout, colnames)
 
 
-#CSV.write(joinpath(packdir,"datasets/generated_testdata.csv"), dout)
+CSV.write(joinpath(packdir,"datasets/generated_testdata.csv"), dout)
 
 dout = CSV.read(joinpath(packdir,"datasets/generated_testdata.csv"),DataFrame)
 
@@ -161,8 +166,8 @@ lmest_fit0[:Piv]
 
 #################### Fitting with Turing.jl ##########################
 
-#model = logtarget(𝒪s, p);
-model = logtarget_large(𝒪s, p);
+model = logtarget(𝒪s, p);
+#model = logtarget_large(𝒪s, p);
 
 #--------------- map -----------------------
 @time map_estimate = optimize(model, MAP());
@@ -170,21 +175,37 @@ model = logtarget_large(𝒪s, p);
 @show mapallZtoλ(θ0)'
 @show mapallZtoλ(θmap)'
 
-@show θ0[:γ12], θmap[:γ12]
-@show θ0[:γ21], θmap[:γ21]
+@show θ0[:γ12] 
+θmap[:γ12]
+
+@show θ0[:γ21] 
+θmap[:γ21]
 
 #--------------- mle -----------------------
-@time mle_estimate = optimize(model, MLE())
+@time mle_estimate = optimize(model, MLE(), NelderMead())
+@edit optimize(model, MLE(), NelderMead())
 θmle = convert_turingoutput(mle_estimate);
 @show mapallZtoλ(θ0)'
 @show mapallZtoλ(θmle)'
 
-@show θ0[:γ12], θmle[:γ12]
-@show θ0[:γ21], θmle[:γ21]
+@show θ0[:γ12] 
+θmle[:γ12]
+
+@show θ0[:γ21] 
+θmle[:γ21]
+
+
+ForwardDiff.gradient(loglik(𝒪s, p), θ0)
+ForwardDiff.gradient(loglik(𝒪s, p), θmle)
+hess = ForwardDiff.hessian(loglik(𝒪s, p), θmle)
+isposdef(-hess)
+eigen(hess)
+issymmetric(hess)
 
 #--------------- NUTS sampler -----------------------
 
 sampler =  NUTS() 
+sampler = HMC(0.01,10)
 @time chain = sample(model, sampler, MCMCDistributed(), 1000, 3; progress=true);
 
 # plotting 
@@ -242,3 +263,9 @@ savefig(joinpath(packdir,"figs/gammas.pdf"))
 lmest_fit0[:Ga]
 
 lmest_fit0[:Piv]
+
+
+
+
+
+
