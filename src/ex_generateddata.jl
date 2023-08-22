@@ -13,8 +13,10 @@ Z4 = [0.5, 1.0, 1.5]
 
 Z = [0.5, 1.0, 1.5]
 
-θ0 = ComponentArray(γ12 = γup, γ21 = γdown, γ23 = γup, γ32 = γdown, Z1=Z, Z2=Z, Z3=Z, Z4=Z)
-#θ0 = ComponentArray(γ12 = γup, γ21 = γdown, γ23 = γup, γ32 = γdown, Z1=Z1, Z2=Z2, Z3=Z3, Z4=Z4)
+restricted = false
+θ0 =  restricted ? ComponentArray(γ12 = γup, γ21 = γdown, γ23 = γup, γ32 = γdown, Z1=Z, Z2=Z, Z3=Z, Z4=Z) : ComponentArray(γ12 = γup, γ21 = γdown, γ23 = γup, γ32 = γdown, Z1=Z1, Z2=Z2, Z3=Z3, Z4=Z4)
+
+ztype = restricted ? Restricted() : Unrestricted() 
 
 println("true vals", "  ", γup,"  ", γdown,"  ", Z1, Z2, Z3, Z4)
 
@@ -105,7 +107,7 @@ colnames = ["subject", "time", "x1", "x2","x3", "y1", "y2", "y3", "y4"]
 rename!(dout, colnames)
 
 
-CSV.write(joinpath(packdir,"datasets/generated_testdata.csv"), dout)
+#CSV.write(joinpath(packdir,"datasets/generated_testdata.csv"), dout)
 
 dout = CSV.read(joinpath(packdir,"datasets/generated_testdata.csv"),DataFrame)
 
@@ -166,12 +168,12 @@ lmest_fit0[:Piv]
 
 #################### Fitting with Turing.jl ##########################
 
-model = logtarget(𝒪s, p);
-#model = logtarget_large(𝒪s, p);
+model = logtarget(ztype, 𝒪s, p);
+
 
 #--------------- map -----------------------
 @time map_estimate = optimize(model, MAP());
-θmap = convert_turingoutput(map_estimate);
+θmap = convert_turingoutput(ztype, map_estimate);
 @show mapallZtoλ(θ0)'
 @show mapallZtoλ(θmap)'
 
@@ -183,8 +185,8 @@ model = logtarget(𝒪s, p);
 
 #--------------- mle -----------------------
 @time mle_estimate = optimize(model, MLE(), NelderMead())
-@edit optimize(model, MLE(), NelderMead())
-θmle = convert_turingoutput(mle_estimate);
+#@edit optimize(model, MLE(), NelderMead())
+θmle = convert_turingoutput(ztype, mle_estimate);
 @show mapallZtoλ(θ0)'
 @show mapallZtoλ(θmle)'
 
@@ -206,6 +208,7 @@ issymmetric(hess)
 
 sampler =  NUTS() 
 sampler = HMC(0.01,10)
+
 @time chain = sample(model, sampler, MCMCDistributed(), 1000, 3; progress=true);
 
 # plotting 
@@ -225,8 +228,11 @@ pNHS = p.NUM_HIDDENSTATES
 @show mapallZtoλ(θpm)'
 @show mapallZtoλ(θ0)'
 
-@show θ0[:γ12], θpm[:γ12]
-@show θ0[:γ21], θpm[:γ21]
+@show θ0[:γ12] 
+@show θpm[:γ12]
+
+@show θ0[:γ21] 
+@show θpm[:γ21]
 
 Z1symb=[Symbol("Z1[1]"), Symbol("Z1[2]"), Symbol("Z1[3]")]
 plot(chain[Z1symb])

@@ -23,14 +23,12 @@ using Parameters
 
 import StatsBase.sample
 
-# const NUM_HIDDENSTATES = 3
-# const DIM_COVARIATES = 2
-# const DIM_RESPONSE = 4
 
+# fix these settings for now
 @with_kw struct Pars
-    NUM_HIDDENSTATES::Int = 3
-    DIM_COVARIATES::Int = 3 # include intercept
-    DIM_RESPONSE::Int = 4
+    NUM_HIDDENSTATES::Int = 3  # 3 hidden states
+    DIM_COVARIATES::Int = 3    # 2 predictors, but include intercept
+    DIM_RESPONSE::Int = 4      # 4 questions
 end
 
 p = Pars()

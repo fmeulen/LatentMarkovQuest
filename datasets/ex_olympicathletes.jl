@@ -1,5 +1,7 @@
 using CSV
 using DataFrames
+
+# read water polo data
 d = CSV.read(joinpath(packdir, "datasets/olympic_athletes.csv"), DataFrame; delim=",", missingstring="NA",
 types= Dict(3=>Float64,4=>Float64,5=>Float64,6=>Int64,7=>Int64,8=>Int64,9=>Int64)) 
 
@@ -35,7 +37,8 @@ for i ∈ 1:n
     push!(𝒪s, ObservationTrajectory(X,Y))
 end    
 
-model = logtarget_large(𝒪s, p);
+model = logtarget(𝒪s, p);
+#model = logtarget_large(𝒪s, p);
 
 #--------------- map -----------------------
 @time map_estimate = optimize(model, MAP());

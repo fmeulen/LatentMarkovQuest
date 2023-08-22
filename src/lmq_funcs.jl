@@ -1,6 +1,8 @@
+# -------------------- model ----------------------------
+# observe Y_i, latent U_i, observe covariates X_i
 # Y_i depends on U_i
 # U_i depends on U_{i-1}, X_i
-# u_1 depends on Πroot(X1)
+# U_1 depends on Πroot(X1)
 
 
 
@@ -25,7 +27,7 @@ Ki(θ,x,p)= SMatrix{p.NUM_HIDDENSTATES,p.NUM_HIDDENSTATES}(
     
 Ki(_,::Missing,p) = SMatrix{p.NUM_HIDDENSTATES,p.NUM_HIDDENSTATES}(1.0I)
  
-scaledandshifted_logistic(x) = 2.0logistic(x) -1.0 # function that maps [0,∞) to [0,1)
+scaledandshifted_logistic(x) = 2.0logistic(x) - 1.0 # function that maps [0,∞) to [0,1)
 
 """
     pullback(θ,x,h)  
@@ -152,11 +154,9 @@ function loglik_and_bif(θ, 𝒪::ObservationTrajectory,p)
     loglik = zero(θ[1][1])
     for i in N:-1:2
         h = pullback(θ, X[i], h) .* h_from_observation(θ, Y[i-1], p)
-#        c = normalise!(h)
         h, c = normalise(h)
         loglik += c
         pushfirst!(H, copy(ForwardDiff.value.(h)))
-        #hprev = h
     end
     loglik += log(dot(h, Πroot(X[1], p)))
     (ll=loglik, H=H)          
@@ -174,7 +174,6 @@ function loglik(θ, 𝒪::ObservationTrajectory, p)
     loglik = zero(θ[1][1])
     for i in N:-1:2
         h = pullback(θ, X[i], h) .* h_from_observation(θ, Y[i-1], p)
-        #c = normalise!(h)
         h, c = normalise(h)
         loglik += c
     end
@@ -197,7 +196,7 @@ end
 
 loglik(𝒪, p) = (θ) -> loglik(θ, 𝒪, p) 
 
-∇loglik(𝒪, p) = (θ) -> ForwardDiff.gradient(loglik(𝒪), θ, p)
+∇loglik(𝒪, p) = (θ) -> ForwardDiff.gradient(loglik(𝒪, p), θ)
 
 # check
 function sample_guided(θ, 𝒪, H, p)# Generate approximate track
@@ -230,30 +229,32 @@ function viterbi(θ, 𝒪::ObservationTrajectory, p)
     #loglik = zero(θ[1][1])
     for i in N:-1:2
         h = pullback(θ, X[i], h) .* h_from_observation(θ, Y[i-1], p)
-        #c = normalise!(h)
         pushfirst!(mls, argmax(h))
         h = unitvec(mls[1], NUM_HIDDENSTATES)
-     #   loglik += c
     end
-    #loglik + log(dot(h, Πroot(X[1])))
     mls
 end
 
 
 ############ use of Turing to sample from the posterior ################
 
+abstract type Ztype end
+struct Restricted <: Ztype end  # same λ for all questions
+struct Unrestricted <: Ztype end # # separate λ for all questions
+
+
+
 # model with λvector the same for all questions (less parameters)
-@model function logtarget(𝒪s, p)
-    γup ~ filldist(Normal(0,5), p.DIM_COVARIATES)#MvNormal(fill(0.0, 2), 2.0 * I)
-    γdown ~ filldist(Normal(0,5), p.DIM_COVARIATES)  #MvNormal(fill(0.0, 2), 2.0 * I)
+@model function logtarget(::Restricted, 𝒪s, p)
+    γup ~ filldist(Normal(0,5), p.DIM_COVARIATES)
+    γdown ~ filldist(Normal(0,5), p.DIM_COVARIATES)  
     Z0 ~ filldist(Exponential(), p.NUM_HIDDENSTATES) 
     Turing.@addlogprob! loglik(ComponentArray(γ12 = γup, γ21 = γdown, γ23 = γup, γ32 = γdown, Z1=Z0, Z2=Z0, Z3=Z0, Z4=Z0), 𝒪s, p)
 end
 
-# model with unequal λvector for questions (less parameters)
-@model function logtarget_large(𝒪s, p)
-    γup ~ filldist(Normal(0,5), p.DIM_COVARIATES)#MvNormal(fill(0.0, 2), 2.0 * I)
-    γdown ~ filldist(Normal(0,5), p.DIM_COVARIATES)  #MvNormal(fill(0.0, 2), 2.0 * I)
+@model function logtarget(::Unrestricted, 𝒪s, p)
+    γup ~ filldist(Normal(0,5), p.DIM_COVARIATES)
+    γdown ~ filldist(Normal(0,5), p.DIM_COVARIATES)  
     
     Z1 ~ filldist(Exponential(), p.NUM_HIDDENSTATES) 
     Z2 ~ filldist(Exponential(), p.NUM_HIDDENSTATES) 
@@ -263,20 +264,20 @@ end
 end
 
 # now with different gammas
-@model function logtarget_large(𝒪s, p)
-    γ12 ~ filldist(Normal(0,5), p.DIM_COVARIATES)#MvNormal(fill(0.0, 2), 2.0 * I)
-    γ13 ~ filldist(Normal(0,5), p.DIM_COVARIATES)#MvNormal(fill(0.0, 2), 2.0 * I)
-    γ21 ~ filldist(Normal(0,5), p.DIM_COVARIATES)  #MvNormal(fill(0.0, 2), 2.0 * I)
-    γ23 ~ filldist(Normal(0,5), p.DIM_COVARIATES)  #MvNormal(fill(0.0, 2), 2.0 * I)
-    γ31 ~ filldist(Normal(0,5), p.DIM_COVARIATES)  #MvNormal(fill(0.0, 2), 2.0 * I)
-    γ32 ~ filldist(Normal(0,5), p.DIM_COVARIATES)  #MvNormal(fill(0.0, 2), 2.0 * I)
+# @model function logtarget_large(𝒪s, p)
+#     γ12 ~ filldist(Normal(0,5), p.DIM_COVARIATES)#MvNormal(fill(0.0, 2), 2.0 * I)
+#     γ13 ~ filldist(Normal(0,5), p.DIM_COVARIATES)#MvNormal(fill(0.0, 2), 2.0 * I)
+#     γ21 ~ filldist(Normal(0,5), p.DIM_COVARIATES)  #MvNormal(fill(0.0, 2), 2.0 * I)
+#     γ23 ~ filldist(Normal(0,5), p.DIM_COVARIATES)  #MvNormal(fill(0.0, 2), 2.0 * I)
+#     γ31 ~ filldist(Normal(0,5), p.DIM_COVARIATES)  #MvNormal(fill(0.0, 2), 2.0 * I)
+#     γ32 ~ filldist(Normal(0,5), p.DIM_COVARIATES)  #MvNormal(fill(0.0, 2), 2.0 * I)
 
-    Z1 ~ filldist(Exponential(), p.NUM_HIDDENSTATES) 
-    Z2 ~ filldist(Exponential(), p.NUM_HIDDENSTATES) 
-    Z3 ~ filldist(Exponential(), p.NUM_HIDDENSTATES) 
-    Z4 ~ filldist(Exponential(), p.NUM_HIDDENSTATES) 
-    Turing.@addlogprob! loglik(ComponentArray(γ12 = γ12, γ13 = γ13, γ21 = γ21, γ23 = γ23, γ31 = γ31, γ32 = γ32, Z1=Z1, Z2=Z2, Z3=Z3, Z4=Z4), 𝒪s, p)
-end
+#     Z1 ~ filldist(Exponential(), p.NUM_HIDDENSTATES) 
+#     Z2 ~ filldist(Exponential(), p.NUM_HIDDENSTATES) 
+#     Z3 ~ filldist(Exponential(), p.NUM_HIDDENSTATES) 
+#     Z4 ~ filldist(Exponential(), p.NUM_HIDDENSTATES) 
+#     Turing.@addlogprob! loglik(ComponentArray(γ12 = γ12, γ13 = γ13, γ21 = γ21, γ23 = γ23, γ31 = γ31, γ32 = γ32, Z1=Z1, Z2=Z2, Z3=Z3, Z4=Z4), 𝒪s, p)
+# end
 
 
 
@@ -285,16 +286,32 @@ mapallZtoλ(θ) = hcat(mapZtoλ(θ.Z1), mapZtoλ(θ.Z2), mapZtoλ(θ.Z3), mapZto
 """
     convert_turingoutput(optimised_model)
 
-    Converts values of Z vectors to λ vectors
+    Function that turns a sample/mle/map from Turing into a ComponentVector.
 
     Example usage: 
     map_estimate = optimize(model, MAP())
-    convert_turingoutput(map_estimate)
+    convert_turingoutput(Restricted(), map_estimate)
 """
-function convert_turingoutput(optimised_model)  # function is not yet adapted to p
+function convert_turingoutput(::Restricted, optimised_model)  # function is not yet adapted to p
     θ =  optimised_model.values
     ComponentArray(γ12=[θ[Symbol("γup[1]")], θ[Symbol("γup[2]")], θ[Symbol("γup[3]")]],
-                      γ21=[θ[Symbol("γdown[1]")], θ[Symbol("γdown[2]")], θ[Symbol("γdown[3]")]],
+                    γ21=[θ[Symbol("γdown[1]")], θ[Symbol("γdown[2]")], θ[Symbol("γdown[3]")]],
+                    γ23=[θ[Symbol("γup[1]")], θ[Symbol("γup[2]")], θ[Symbol("γup[3]")]],
+                    γ32=[θ[Symbol("γdown[1]")], θ[Symbol("γdown[2]")], θ[Symbol("γdown[3]")]],
+                    Z1=[θ[Symbol("Z0[1]")], θ[Symbol("Z0[2]")], θ[Symbol("Z0[3]")]],
+                    Z2=[θ[Symbol("Z0[1]")], θ[Symbol("Z0[2]")], θ[Symbol("Z0[3]")]],
+                    Z3=[θ[Symbol("Z0[1]")], θ[Symbol("Z0[2]")], θ[Symbol("Z0[3]")]],
+                    Z4=[θ[Symbol("Z0[1]")], θ[Symbol("Z0[2]")], θ[Symbol("Z0[3]")]]
+                    )
+end
+
+
+function convert_turingoutput(::Unrestricted, optimised_model)  # function is not yet adapted to p
+    θ =  optimised_model.values
+    ComponentArray(γ12=[θ[Symbol("γup[1]")], θ[Symbol("γup[2]")], θ[Symbol("γup[3]")]],
+                    γ21=[θ[Symbol("γdown[1]")], θ[Symbol("γdown[2]")], θ[Symbol("γdown[3]")]],
+                    γ23=[θ[Symbol("γup[1]")], θ[Symbol("γup[2]")], θ[Symbol("γup[3]")]],
+                    γ32=[θ[Symbol("γdown[1]")], θ[Symbol("γdown[2]")], θ[Symbol("γdown[3]")]],
                       Z1=[θ[Symbol("Z1[1]")], θ[Symbol("Z1[2]")], θ[Symbol("Z1[3]")]],
                       Z2=[θ[Symbol("Z2[1]")], θ[Symbol("Z2[2]")], θ[Symbol("Z2[3]")]],
                       Z3=[θ[Symbol("Z3[1]")], θ[Symbol("Z3[2]")], θ[Symbol("Z3[3]")]],
