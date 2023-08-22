@@ -1,7 +1,7 @@
 using CSV
 using DataFrames
 
-restricted = true
+restricted = false
 ztype = restricted ? Restricted() : Unrestricted() 
 
 # read water polo data
@@ -55,10 +55,15 @@ model = logtarget(ztype, 𝒪s, p);
 
 sampler =  NUTS() 
 @time chain = sample(model, sampler, MCMCDistributed(), 1000, 3; progress=true);
-plot(chain)
 
+plot(chain)
 savefig(joinpath(packdir,"figs/olympic_histograms_traces.pdf"))
 
+histogram(chain)
+savefig(joinpath(packdir,"figs/histograms_traces.pdf"))
+
+
+describe(chain)[1]
 θpm = describe(chain)[1].nt.mean
 pDC = p.DIM_COVARIATES
 pNHS = p.NUM_HIDDENSTATES
