@@ -1,6 +1,9 @@
 using CSV
 using DataFrames
 
+restricted = true
+ztype = restricted ? Restricted() : Unrestricted() 
+
 # read water polo data
 d = CSV.read(joinpath(packdir, "datasets/olympic_athletes.csv"), DataFrame; delim=",", missingstring="NA",
 types= Dict(3=>Float64,4=>Float64,5=>Float64,6=>Int64,7=>Int64,8=>Int64,9=>Int64)) 
@@ -37,18 +40,39 @@ for i ∈ 1:n
     push!(𝒪s, ObservationTrajectory(X,Y))
 end    
 
-model = logtarget(𝒪s, p);
-#model = logtarget_large(𝒪s, p);
+model = logtarget(ztype, 𝒪s, p);
+
 
 #--------------- map -----------------------
 @time map_estimate = optimize(model, MAP());
+θmap = convert_turingoutput(ztype, map_estimate);
 
-θmap = convert_turingoutput(map_estimate);
+@show θmap[:γ12] 
+@show θmap[:γ21] 
 
 @show mapallZtoλ(θmap)'
+
 
 sampler =  NUTS() 
 @time chain = sample(model, sampler, MCMCDistributed(), 1000, 3; progress=true);
 plot(chain)
 
 savefig(joinpath(packdir,"figs/olympic_histograms_traces.pdf"))
+
+θpm = describe(chain)[1].nt.mean
+pDC = p.DIM_COVARIATES
+pNHS = p.NUM_HIDDENSTATES
+if restricted 
+    θpm = ComponentArray(γ12=θpm[1:pDC], γ21=θpm[pDC+1:2pDC], Z1=θpm[2pDC+1:3pDC], 
+                    Z2=θpm[2pDC+1:3pDC], Z3=θpm[2pDC+1:3pDC], Z4=θpm[2pDC+1:3pDC])
+else
+    θpm = ComponentArray(γ12=θpm[1:pDC], γ21=θpm[pDC+1:2pDC], Z1=θpm[2pDC+1:3pDC], 
+                    Z2=θpm[(3pDC+1):(3pDC+pNHS)],Z3=θpm[(3pDC+pNHS+1):(3pDC+2pNHS)],Z4=θpm[(3pDC+2pNHS+1):(3pDC+3pNHS)])
+end
+
+
+@show mapallZtoλ(θpm)'
+
+@show θpm[:γ12]
+
+@show θpm[:γ21]
