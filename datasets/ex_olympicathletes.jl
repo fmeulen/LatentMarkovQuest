@@ -11,7 +11,7 @@ types= Dict(3=>Float64,4=>Float64,5=>Float64,6=>Int64,7=>Int64,8=>Int64,9=>Int64
 # x: (sport,strength,competition), cols 3:5
 # y: (participation, modification, performance, symptoms), cols 6:9 (on binary scale)
 
-p = Pars(NUM_HIDDENSTATES = 3, DIM_COVARIATES= 3, DIM_RESPONSE = 4)
+p = Pars(NUM_HIDDENSTATES = 3, DIM_COVARIATES= 4, DIM_RESPONSE = 4)
 TX = Union{Missing, SVector{p.DIM_COVARIATES,Float64}} # indien er missing vals zijn 
 TY = Union{Missing, SVector{p.DIM_RESPONSE, Int64}}
 
@@ -24,7 +24,7 @@ for i ∈ 1:n
     X = TX[]
     Y = TY[]
     for r in eachrow(di)
-        x = SA[r[3], r[4], r[5]]
+        x = SA[1.0, r[3], r[4], r[5]]  # include intercept
         if isanymissing(x)
             push!(X, missing)
         else
@@ -45,7 +45,7 @@ model = logtarget(ztype, 𝒪s, p);
 
 #--------------- map -----------------------
 @time map_estimate = optimize(model, MAP());
-θmap = convert_turingoutput(ztype, map_estimate);
+θmap = convert_turingoutput(ztype, map_estimate, p);
 
 @show θmap[:γ12] 
 @show θmap[:γ21] 
