@@ -6,6 +6,8 @@ using CSV
 γup = [0.3, 2.0, 0.0]
 γdown = [-0.4, -0.5, -0.5]
 
+p = Pars()
+
 Z1 = [0.5, 1.0, 1.5]
 Z2 = [0.5, 1.0, 1.5]
 Z3 = [0.2, 1.0, 2.5]
@@ -173,7 +175,7 @@ model = logtarget(ztype, 𝒪s, p);
 
 #--------------- map -----------------------
 @time map_estimate = optimize(model, MAP());
-θmap = convert_turingoutput(ztype, map_estimate);
+θmap = convert_turingoutput(ztype, map_estimate, p);
 @show mapallZtoλ(θ0)'
 @show mapallZtoλ(θmap)'
 
@@ -186,7 +188,7 @@ model = logtarget(ztype, 𝒪s, p);
 #--------------- mle -----------------------
 @time mle_estimate = optimize(model, MLE(), NelderMead())
 #@edit optimize(model, MLE(), NelderMead())
-θmle = convert_turingoutput(ztype, mle_estimate);
+θmle = convert_turingoutput(ztype, mle_estimate, p);
 @show mapallZtoλ(θ0)'
 @show mapallZtoλ(θmle)'
 
