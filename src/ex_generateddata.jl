@@ -3,8 +3,8 @@ using RCall
 using CSV
 
 # True parameter vector
-γup = [0.3, 2.0, 0.0]
-γdown = [-0.4, -0.5, -0.5]
+γup = [2.0, 0.0]
+γdown = [-0.5, -0.5]
 
 p = Pars()
 
@@ -15,7 +15,7 @@ Z4 = [0.5, 1.0, 1.5]
 
 Z = [0.5, 1.0, 1.5]
 
-restricted = false
+restricted = true#false
 θ0 =  restricted ? ComponentArray(γ12 = γup, γ21 = γdown, γ23 = γup, γ32 = γdown, Z1=Z, Z2=Z, Z3=Z, Z4=Z) : ComponentArray(γ12 = γup, γ21 = γdown, γ23 = γup, γ32 = γdown, Z1=Z1, Z2=Z2, Z3=Z3, Z4=Z4)
 
 ztype = restricted ? Restricted() : Unrestricted() 
@@ -29,6 +29,7 @@ T = 50 # nr of times at which we observe
 # generate latent Markov process and observations (returns array of ObservationTrajectory)
 
 INCLUDE_MISSING  = false
+p = Pars(DIM_COVARIATES=2)
 
 Random.seed!(9)
 
@@ -44,12 +45,12 @@ if INCLUDE_MISSING
         if i ≤ 10 
             slope = rand(Uniform(-0.05,0.05))
             for t in 1: T
-                push!(X, SA[1.0, slope*t + 0.1*randn(), 0.0])
+                push!(X, SA[slope*t + 0.1*randn(), 0.0])
             end
         else
             slope = rand(Uniform(-0.05,0.05))
             for t in 1: T
-                push!(X, SA[1.0, slope*t + 0.1*randn(), 1.0])
+                push!(X, SA[slope*t + 0.1*randn(), 1.0])
             end
             X[3] = missing
         end
@@ -74,12 +75,12 @@ else
         if i ≤ 10 
             slope = rand(Uniform(-0.05,0.05))
             for t in 1: T
-                push!(X, SA[1.0, slope*t + 0.1*randn(), 0.0])
+                push!(X, SA[slope*t + 0.1*randn(), 0.0])
             end
         else
             slope = rand(Uniform(-0.05,0.05))
             for t in 1: T
-                push!(X, SA[1.0, slope*t + 0.1*randn(), 1.0])
+                push!(X, SA[slope*t + 0.1*randn(), 1.0])
             end
         end
         U, Y =  sample(θ0, X, p) 
@@ -105,7 +106,7 @@ for i ∈ 1:n
 end
 
 dout = DataFrame(vcat(out...), :auto)
-colnames = ["subject", "time", "x1", "x2","x3", "y1", "y2", "y3", "y4"]
+colnames = ["subject", "time", "x1", "x2", "y1", "y2", "y3", "y4"]
 rename!(dout, colnames)
 
 
@@ -209,9 +210,10 @@ issymmetric(hess)
 #--------------- NUTS sampler -----------------------
 
 sampler =  NUTS() 
-sampler = HMC(0.01,10)
+#sampler = HMC(0.01,10)
 
-@time chain = sample(model, sampler, MCMCDistributed(), 1000, 3; progress=true);
+# if initial ϵ=0.05 works.
+@time chain = sample(model, sampler, MCMCDistributed(), 500, 3; progress=true);
 
 # plotting 
 histogram(chain)
@@ -219,19 +221,30 @@ savefig(joinpath(packdir,"figs/histograms.pdf"))
 plot(chain)
 savefig(joinpath(packdir,"figs/histograms_traces.pdf"))
 
-# extract posterior mean
-θpm = describe(chain)[1].nt.mean
-pDC = p.DIM_COVARIATES
-pNHS = p.NUM_HIDDENSTATES
+# extract posterior mean from mcmc output
+θs = describe(chain)[1].nt.mean
+names = String.(describe(chain)[1].nt.parameters)
+
+@warn "We assume here 4 questions (hence Z1,...,Z4). Adapt if different"
 if restricted 
-    θpm = ComponentArray(γ12=θpm[1:pDC], γ21=θpm[pDC+1:2pDC], Z1=θpm[2pDC+1:3pDC], 
-                    Z2=θpm[2pDC+1:3pDC], Z3=θpm[2pDC+1:3pDC], Z4=θpm[2pDC+1:3pDC])
+    γup_ = θs[occursin.("γup", names)]
+    γdown_ = θs[occursin.("γdown", names)]
+    Z1_ = θs[occursin.("Z0", names)]
+    Z2_ = θs[occursin.("Z0", names)]
+    Z3_ = θs[occursin.("Z0", names)]
+    Z4_ = θs[occursin.("Z0", names)]
+    θpm = ComponentArray(γ12=γup_, γ21=γdown_, Z1=Z1_, Z2=Z2_, Z3=Z3_, Z4=Z4_)
 else
-    θpm = ComponentArray(γ12=θpm[1:pDC], γ21=θpm[pDC+1:2pDC], Z1=θpm[2pDC+1:3pDC], 
-                    Z2=θpm[(3pDC+1):(3pDC+pNHS)],Z3=θpm[(3pDC+pNHS+1):(3pDC+2pNHS)],Z4=θpm[(3pDC+2pNHS+1):(3pDC+3pNHS)])
+    γup_ = θs[occursin.("γup", names)]
+    γdown_ = θs[occursin.("γdown", names)]
+    Z1_ = θs[occursin.("Z1", names)]
+    Z2_ = θs[occursin.("Z2", names)]
+    Z3_ = θs[occursin.("Z3", names)]
+    Z4_ = θs[occursin.("Z4", names)]
+    θpm = ComponentArray(γ12=γup_, γ21=γdown_, Z1=Z1_, Z2=Z2_, Z3=Z3_, Z4=Z4_)
 end
 
-
+# compare posterior means to true values
 @show mapallZtoλ(θpm)'
 @show mapallZtoλ(θ0)'
 
@@ -241,6 +254,7 @@ end
 @show θ0[:γ21] 
 @show θpm[:γ21]
 
+@warn "check if such Z are in the model"
 Z1symb=[Symbol("Z1[1]"), Symbol("Z1[2]"), Symbol("Z1[3]")]
 plot(chain[Z1symb])
 savefig(joinpath(packdir,"figs/Z1s.pdf"))

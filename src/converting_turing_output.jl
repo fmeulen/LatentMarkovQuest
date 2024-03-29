@@ -63,6 +63,16 @@ function convert_turingoutput(::Unrestricted, optimised_model, p)  # function is
         Z3=[θ[Symbol("Z3[1]")], θ[Symbol("Z3[2]")], θ[Symbol("Z3[3]")]],
         Z4=[θ[Symbol("Z4[1]")], θ[Symbol("Z4[2]")], θ[Symbol("Z4[3]")]]
         )
+    elseif p.DIM_COVARIATES==2
+        out = ComponentArray(γ12=[θ[Symbol("γup[1]")], θ[Symbol("γup[2]")]],
+        γ21=[θ[Symbol("γdown[1]")], θ[Symbol("γdown[2]")]],
+        γ23=[θ[Symbol("γup[1]")], θ[Symbol("γup[2]")]],
+        γ32=[θ[Symbol("γdown[1]")], θ[Symbol("γdown[2]")]],
+        Z1=[θ[Symbol("Z1[1]")], θ[Symbol("Z1[2]")], θ[Symbol("Z1[3]")]],
+        Z2=[θ[Symbol("Z2[1]")], θ[Symbol("Z2[2]")], θ[Symbol("Z2[3]")]],
+        Z3=[θ[Symbol("Z3[1]")], θ[Symbol("Z3[2]")], θ[Symbol("Z3[3]")]],
+        Z4=[θ[Symbol("Z4[1]")], θ[Symbol("Z4[2]")], θ[Symbol("Z4[3]")]]
+        )
     else 
         @error("convert_turingoutput has not been implemented for this number of covariates")
     end
