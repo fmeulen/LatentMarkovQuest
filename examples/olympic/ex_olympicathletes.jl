@@ -1,21 +1,22 @@
 using CSV
 using DataFrames
-using JLD2
+using JLD2 
 
-mkpath("olympic")
-olympdir = packdir*"/src/olympic"
+wd = @__DIR__
+cd(wd)
 
 restricted = false
 ztype = restricted ? Restricted() : Unrestricted() 
 
 # read water polo data
-d = CSV.read(joinpath(packdir, "datasets/olympic_athletes.csv"), DataFrame; delim=",", missingstring="NA",
+d = CSV.read("olympic_athletes.csv", DataFrame; delim=",", missingstring="NA",
 types= Dict(3=>Float64,4=>Float64,5=>Float64,6=>Int64,7=>Int64,8=>Int64,9=>Int64)) 
 
 # x: (sport,strength,competition), cols 3:5
 # y: (participation, modification, performance, symptoms), cols 6:9 (on binary scale)
 
 p = Pars(NUM_HIDDENSTATES = 3, DIM_COVARIATES= 4, DIM_RESPONSE = 4)
+
 TX = Union{Missing, SVector{p.DIM_COVARIATES,Float64}} # indien er missing vals zijn 
 TY = Union{Missing, SVector{p.DIM_RESPONSE, Int64}}
 
@@ -56,20 +57,16 @@ model = logtarget(ztype, 𝒪s, p);
 
 @show mapallZtoλ(θmap)'
 
-
+# ----------- mcmc ---------------------------
 sampler =  NUTS() 
 @time chain = sample(model, sampler, MCMCDistributed(), 500, 3; progress=true);
 
 plot(chain)
-savefig(joinpath(packdir,"/src/olympicathletes/olympic_histograms_traces.pdf"))
+savefig(wd*"/figs/olympic_histograms_traces.pdf")
 
 histogram(chain)
-savefig(joinpath(packdir,"/sir/olympicathletes/histograms_traces.pdf"))
+savefig(wd*"/figs/histograms_traces.pdf")
 
-
-describe(chain)[1]
-θpm = describe(chain)[1].nt.mean
-pDC = p.DIM_COVARIATES
 
 # extract posterior mean from mcmc output
 θs = describe(chain)[1].nt.mean
@@ -94,24 +91,17 @@ else
     θpm = ComponentArray(γ12=γup_, γ21=γdown_, Z1=Z1_, Z2=Z2_, Z3=Z3_, Z4=Z4_)
 end
 
-
-
-
-pNHS = p.NUM_HIDDENSTATES
-if restricted 
-    θpm = ComponentArray(γ12=θpm[1:pDC], γ21=θpm[pDC+1:2pDC], Z1=θpm[2pDC+1:3pDC], 
-                    Z2=θpm[2pDC+1:3pDC], Z3=θpm[2pDC+1:3pDC], Z4=θpm[2pDC+1:3pDC])
-else
-    θpm = ComponentArray(γ12=θpm[1:pDC], γ21=θpm[pDC+1:2pDC], Z1=θpm[2pDC+1:3pDC], 
-                    Z2=θpm[(3pDC+1):(3pDC+pNHS)],Z3=θpm[(3pDC+pNHS+1):(3pDC+2pNHS)],Z4=θpm[(3pDC+2pNHS+1):(3pDC+3pNHS)])
-end
-
-
-@show mapallZtoλ(θpm)'
+λs = mapallZtoλ(θpm)'
+@show λs
 
 @show θpm[:γ12]
 
 @show θpm[:γ21]
 
-# save objects
-jldsave("ex_olympicathletes.jld2"; 𝒪s, model, θmap, sampler, chain, θpm)
+# save objects 
+jldsave("ex_olympicathletes.jld2"; 𝒪s, model, θpm, λs, chain)
+
+### to open again
+file = jldopen("ex_olympicathletes.jld2", "r") # for reading
+@unpack 𝒪s, chain = file
+###
