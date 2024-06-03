@@ -1,6 +1,14 @@
 ########### An example, where data are generated from the model ####################
 using RCall
 using CSV
+using JLD2
+
+wd = @__DIR__
+cd(wd)
+
+# Prior on root node (x can be inital state)
+Πroot(_, p) = (@SVector ones(p.NUM_HIDDENSTATES))/p.NUM_HIDDENSTATES    
+
 
 # True parameter vector
 γup = [2.0, 0.0]
@@ -112,7 +120,7 @@ rename!(dout, colnames)
 
 #CSV.write(joinpath(packdir,"datasets/generated_testdata.csv"), dout)
 
-dout = CSV.read(joinpath(packdir,"datasets/generated_testdata.csv"),DataFrame)
+dout = CSV.read("generated_testdata.csv",DataFrame)
 
 #### Fit with LMest #####
 
@@ -217,9 +225,9 @@ sampler =  NUTS()
 
 # plotting 
 histogram(chain)
-savefig(joinpath(packdir,"figs/histograms.pdf"))
+savefig(wd*"/figs/histograms.pdf")
 plot(chain)
-savefig(joinpath(packdir,"figs/histograms_traces.pdf"))
+savefig(wd*"/figs/histograms_traces.pdf")
 
 # extract posterior mean from mcmc output
 θs = describe(chain)[1].nt.mean
@@ -254,24 +262,20 @@ end
 @show θ0[:γ21] 
 @show θpm[:γ21]
 
-@warn "check if such Z are in the model"
-Z1symb=[Symbol("Z1[1]"), Symbol("Z1[2]"), Symbol("Z1[3]")]
-plot(chain[Z1symb])
-savefig(joinpath(packdir,"figs/Z1s.pdf"))
-
-plot(
-    traceplot(chain[Z1symb], title="traceplot"),
-    #meanplot(chain[Z1symb], title="meanplot"),
-    density(chain[Z1symb], title="density"),
-    #histogram(chain[Z1symb], title="histogram"),
-    #autocorplot(chain[Z1symb], title="autocorplot"),
-    dpi=300, size=(900, 900))
+# can finetune graphs like below
+# plot(
+#     traceplot(chain[Z1symb], title="traceplot"),
+#     #meanplot(chain[Z1symb], title="meanplot"),
+#     density(chain[Z1symb], title="density"),
+#     #histogram(chain[Z1symb], title="histogram"),
+#     #autocorplot(chain[Z1symb], title="autocorplot"),
+#     dpi=300, size=(900, 900))
 
 
-γsymb=[Symbol("γup[1]"), Symbol("γup[2]"), Symbol("γdown[1]"), Symbol("γdown[2]")]
+# γsymb=[Symbol("γup[1]"), Symbol("γup[2]"), Symbol("γdown[1]"), Symbol("γdown[2]")]
 
-plot(chain[γsymb])
-savefig(joinpath(packdir,"figs/gammas.pdf"))
+# plot(chain[γsymb])
+# savefig(joinpath(packdir,"figs/gammas.pdf"))
 
 
 #methodswith(MCMCChains.Chains) #to know methods name which we can apply on chain object
@@ -295,4 +299,12 @@ lmest_fit0[:Piv]
 
 
 
+# save objects 
+jldsave("ex_generateddata.jld2"; 𝒪s, model, θpm, λs, chain, ztype)
+
+
+### to open again
+# aa = jldopen("ex_generateddata.jld2")
+# aa["𝒪s"]
+###
 

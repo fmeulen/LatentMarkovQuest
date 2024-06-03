@@ -5,6 +5,10 @@ using JLD2
 wd = @__DIR__
 cd(wd)
 
+# Prior on root node (x can be inital state)
+Πroot(_, p) = (@SVector ones(p.NUM_HIDDENSTATES))/p.NUM_HIDDENSTATES    
+
+
 restricted = false
 ztype = restricted ? Restricted() : Unrestricted() 
 
@@ -99,9 +103,12 @@ end
 @show θpm[:γ21]
 
 # save objects 
-jldsave("ex_olympicathletes.jld2"; 𝒪s, model, θpm, λs, chain)
+jldsave("ex_olympicathletes.jld2"; 𝒪s, model, θpm, λs, chain, ztype)
+
 
 ### to open again
-file = jldopen("ex_olympicathletes.jld2", "r") # for reading
-@unpack 𝒪s, chain = file
+aa = jldopen("ex_olympicathletes.jld2")
+aa["𝒪s"]
 ###
+
+#---------------- generating forward scenarios -------------------------
