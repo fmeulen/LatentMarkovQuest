@@ -111,19 +111,22 @@ aa = jldopen("ex_olympicathletes.jld2")
 aa["𝒪s"]
 ###
 
+
+
 #---------------- generating forward scenarios -------------------------
 
 # extract info from HMC
 # chain.value.data 500×32×3 Array{Float64, 3}, so this contains the iterates from the 3 chains
+
+chain = aa["chain"] # if read via jldopen
 vals = vcat(chain.value.data[:,:,1], chain.value.data[:,:,2], chain.value.data[:,:,3]) # merge all iterates
 names = vcat(chain.name_map.parameters, chain.name_map.internals)
-
 
 
 # set training load and initial latent status
 trainingload = CSV.read("Covariates.csv", DataFrame)
 X = [SA[x...] for x in eachcol(trainingload)]
-U0 = 1
+U0 = 2 # presently assumed latent state
 
 scenarios = Vector{Int64}[]
 for i ∈ 1:size(vals)[1]
@@ -133,13 +136,6 @@ for i ∈ 1:size(vals)[1]
     latentpath = sample_latent(θ, X, U0, p)
     push!(scenarios, latentpath)
 end
-
-# simplest plotting method (bad)
-pl = plot(scenarios[1])
-for x in scenarios
-    plot!(pl, x)
-end
-pl 
 
 # compute proportions at each future time instance
 prs = []
@@ -151,25 +147,17 @@ for k in 1:L
 end
 
 
-
-
-# # stacked barplots
-# prs_df = DataFrame(hcat(prs...)', :auto)
-# rename(prs_df, ["1", "2", "3"])
-
-# prs_mat = hcat(prs...)'
-# groupedbar(prs_df, bar_position = :stack, bar_width=0.7)
-# groupedbar(prs_mat, bar_position = :stack, bar_width=0.7, label="")
-
-
-dbar = DataFrame(y= vcat(prs...), x = repeat(0:10, inner=3), state= repeat(["1", "2", "3"], outer=11))
+#----------- make a barplot using R's ggplot -------------------
+dbar = DataFrame(y= vcat(prs...), 
+                 x = repeat(0:10, inner=3), 
+                 state= repeat(["1", "2", "3"], outer=11))
 using RCall
 
 @rput dbar
 R"""
+library(tidyverse)
 mytheme = theme_bw()
 theme_set(mytheme)  
-library(tidyverse)
 
 dbar %>%  ggplot(aes(x=x,y=y, fill=state)) + geom_bar(stat="identity") + labs(x="time", y="state") +
 scale_x_continuous(breaks=0:10)

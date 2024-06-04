@@ -23,8 +23,6 @@ using Parameters
 
 import StatsBase.sample
 
-
-# fix these settings for now
 @with_kw struct Pars
     NUM_HIDDENSTATES::Int = 3  # 3 hidden states (don't change)
     DIM_COVARIATES::Int = 3    # 2 predictors, but include intercept; this one can be changed (nothing hardcoded)
@@ -33,5 +31,8 @@ end
 
 p = Pars()
 
-include("lmq_funcs.jl")
+include("lmq.jl")
+include("turingmodels.jl")
 include("converting_turing_output.jl")
+# include("viterbi.jl")
+# include("genericfuncs.jl")

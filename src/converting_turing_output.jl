@@ -1,4 +1,3 @@
-# this works, but is somewhat ugly
 
 
 mapallZtoλ(θ) = hcat(mapZtoλ(θ.Z1), mapZtoλ(θ.Z2), mapZtoλ(θ.Z3), mapZtoλ(θ.Z4))
@@ -12,7 +11,7 @@ mapallZtoλ(θ) = hcat(mapZtoλ(θ.Z1), mapZtoλ(θ.Z2), mapZtoλ(θ.Z3), mapZto
     map_estimate = optimize(model, MAP())
     convert_turingoutput(Restricted(), map_estimate)
 """
-function convert_turingoutput(::Restricted, optimised_model, p)  # function is not yet adapted to p
+function convert_turingoutput(::Restricted, optimised_model, p)  
     θ =  optimised_model.values
     if p.DIM_COVARIATES==3
         out = ComponentArray(γ12=[θ[Symbol("γup[1]")], θ[Symbol("γup[2]")], θ[Symbol("γup[3]")]],
@@ -51,7 +50,7 @@ function convert_turingoutput(::Restricted, optimised_model, p)  # function is n
 end
 
 
-function convert_turingoutput(::Unrestricted, optimised_model, p)  # function is not yet adapted to p
+function convert_turingoutput(::Unrestricted, optimised_model, p)  
     θ =  optimised_model.values
     if p.DIM_COVARIATES==3
         out = ComponentArray(γ12=[θ[Symbol("γup[1]")], θ[Symbol("γup[2]")], θ[Symbol("γup[3]")]],
