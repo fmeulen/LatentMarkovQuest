@@ -112,3 +112,66 @@ aa["𝒪s"]
 ###
 
 #---------------- generating forward scenarios -------------------------
+
+# extract info from HMC
+# chain.value.data 500×32×3 Array{Float64, 3}, so this contains the iterates from the 3 chains
+vals = vcat(chain.value.data[:,:,1], chain.value.data[:,:,2], chain.value.data[:,:,3]) # merge all iterates
+names = vcat(chain.name_map.parameters, chain.name_map.internals)
+
+
+
+# set training load and initial latent status
+trainingload = CSV.read("Covariates.csv", DataFrame)
+X = [SA[x...] for x in eachcol(trainingload)]
+U0 = 1
+
+scenarios = Vector{Int64}[]
+for i ∈ 1:size(vals)[1]
+    γup = vals[i, 1:4]
+    γdown = vals[i, 5:8]
+    θ =  ComponentArray(γ12=γup, γ21=γdown, γ23=γup, γ32=γdown)
+    latentpath = sample_latent(θ, X, U0, p)
+    push!(scenarios, latentpath)
+end
+
+# simplest plotting method (bad)
+pl = plot(scenarios[1])
+for x in scenarios
+    plot!(pl, x)
+end
+pl 
+
+# compute proportions at each future time instance
+prs = []
+L = length(scenarios[1])
+for k in 1:L
+    x = getindex.(scenarios, k)
+    pr = proportions(x,p.NUM_HIDDENSTATES) 
+    push!(prs, pr)
+end
+
+
+
+
+# # stacked barplots
+# prs_df = DataFrame(hcat(prs...)', :auto)
+# rename(prs_df, ["1", "2", "3"])
+
+# prs_mat = hcat(prs...)'
+# groupedbar(prs_df, bar_position = :stack, bar_width=0.7)
+# groupedbar(prs_mat, bar_position = :stack, bar_width=0.7, label="")
+
+
+dbar = DataFrame(y= vcat(prs...), x = repeat(0:10, inner=3), state= repeat(["1", "2", "3"], outer=11))
+using RCall
+
+@rput dbar
+R"""
+mytheme = theme_bw()
+theme_set(mytheme)  
+library(tidyverse)
+
+dbar %>%  ggplot(aes(x=x,y=y, fill=state)) + geom_bar(stat="identity") + labs(x="time", y="state") +
+scale_x_continuous(breaks=0:10)
+ggsave("forward_latent.pdf", width=6, height=2.5)
+"""

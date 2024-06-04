@@ -89,7 +89,7 @@ sample_observation(Λ, u) =  SA[sample(Weights(Λ[1][u,:])), sample(Weights(Λ[2
     (thus, last element of X are not used)
 
 """
-function sample(θ, X, p)            # Generate exact track + observations
+function sample(θ, X, p)            # Generate track with initial value from prior + observations
     Λ = Λi(θ)
     uprev = sample(Weights(Πroot(X[1],p)))                  # sample u1 (possibly depending on X[1])
     U = [uprev]
@@ -101,6 +101,29 @@ function sample(θ, X, p)            # Generate exact track + observations
     Y = [sample_observation(Λ, u) for u ∈ U]
     U, Y
 end
+
+"""
+sample_latent(θ, X, U0, p)
+    γup = rand(4)
+    γdown = rand(4)
+
+    X = [SA[1,2,3,4], SA[4,5,6,7]]
+    θ = ComponentArray(γ12=γup, γ21=γdown, γ23=γup, γ32=γdown)
+    U0 = 2
+    sample_latent(θ, X, U0, p)
+"""
+function sample_latent(θ, X, U0, p)            # Generate track starting from U0 + for a future scenario contained in X
+    uprev = U0
+    U = [uprev]
+    for i in eachindex(X)
+        u = sample(Weights(Ki(θ,X[i],p)[uprev,:]))         # Generate sample from previous state
+        push!(U, copy(u))
+        uprev = u
+    end    
+    U
+end
+
+
 
 
 h_from_one_observation(Λ, i::Int) = Λ[:,i]
