@@ -16,23 +16,25 @@ ObservationTrajectory(X, _) = ObservationTrajectory(X, fill(SA[1,1,1,1], length(
 
     create transition probability matrix when parameter is θ and state is x
 """    
-Ki(θ,x,p)= SMatrix{p.NUM_HIDDENSTATES,p.NUM_HIDDENSTATES}(  #not generic
-    NNlib.softmax([0.0 dot(x,θ.γ12) -Inf64; 
-                    dot(x,θ.γ21) 0.0 dot(x,θ.γ23);
-                     -Inf64 dot(x,θ.γ32) 0.0];dims=2) ) 
+Ki(θ, x, p, i)= SMatrix{p.NUM_HIDDENSTATES,p.NUM_HIDDENSTATES}(  #not generic, restrict transitions to neighboring states
+    α = θ.α[i]
+    γ12 = SA[α, θ.γ12...]
+    γ23 = SA[α, θ.γ23...]
+    γ12 = SA[α, θ.γ12...]
+    γ23 = SA[α, θ.γ23...]
+    NNlib.softmax([0.0 dot(x,γ12) -Inf64; 
+                    dot(x,γ21) 0.0 dot(x,γ23);
+                     -Inf64 dot(x,γ32) 0.0];dims=2) ) 
     
-Ki(_,::Missing,p) = SMatrix{p.NUM_HIDDENSTATES,p.NUM_HIDDENSTATES}(1.0I) #generic
+Ki(_,::Missing, p, i) = SMatrix{p.NUM_HIDDENSTATES,p.NUM_HIDDENSTATES}(1.0I) #generic
  
 """
     pullback(θ,x,h)  
         
     returns  Ki(θ,x)*h
 """
-function pullback(θ,x,h) # not generic
-    a1 = dot(StatsFuns.softmax(SA[0.0, dot(x,θ.γ12), -Inf64]),h)
-    a2 = dot(StatsFuns.softmax(SA[dot(x,θ.γ21), 0.0 ,dot(x,θ.γ23)]),h)
-    a3 = dot(StatsFuns.softmax(SA[-Inf64, dot(x,θ.γ32), 0.0]),h)
-    SA[a1,a2,a3]
+function pullback(θ,x,h, i) # not generic
+    Ki(θ, x, p, i) * h
 end
 
 """
@@ -41,10 +43,10 @@ end
     returns pullback in case covariates are missing
     as we assume no state change in this case, this simply returns h
 """
-pullback(_, ::Missing, h) = h
+pullback(_, ::Missing, h, i) = h
 
 # mapping Z to λ (prior construction on λs)
-scaledandshifted_logistic(x) = 2.0logistic(x) - 1.0 # function that maps [0,∞) to [0,1) 
+scaledandshifted_logistic(x) = 2.0logistic(.75*x) - 1.0 # function that maps [0,∞) to [0,1) 
 mapZtoλ(x) = scaledandshifted_logistic.(cumsum(x))
 
 """
@@ -53,7 +55,7 @@ mapZtoλ(x) = scaledandshifted_logistic.(cumsum(x))
     make matrix [1.0-λ[1] λ[1]; 1.0-λ[2] λ[2]; 1.0-λ[3] λ[3]] (if 3 latent vars)
 
     # construct transition kernel Λ to observations
-    # λ1, λ2, λ3 is formed by setting λi = logistic(cumsum(Z)[i])
+    # λ1, λ2, λ3 is formed by setting λi = scaledandshifted_logistic(cumsum(Z)[i])
 """
 function response(Z) # not generic
         λ = mapZtoλ(Z)
@@ -82,12 +84,12 @@ sample_observation(Λ, u) =  SA[sample(Weights(Λ[1][u,:])), sample(Weights(Λ[2
     (thus, last element of X are not used)
 
 """
-function sample(θ, X, p)            # generic
+function sample(θ, X, p, i)            # generic
     Λ = Λi(θ)
     uprev = sample(Weights(Πroot(X[1],p)))                  # sample u1 (possibly depending on X[1])
     U = [uprev]
-    for i in eachindex(X[2:end])
-        u = sample(Weights(Ki(θ,X[i],p)[uprev,:]))         # Generate sample from previous state
+    for m in eachindex(X[2:end])
+        u = sample(Weights(Ki(θ,X[m],p, i)[uprev,:]))         # Generate sample from previous state
         push!(U, copy(u))
         uprev = u
     end
@@ -107,11 +109,11 @@ end
         U0 = 2
         sample_latent(θ, X, U0, p)
 """
-function sample_latent(θ, X, U0, p)            # generic
+function sample_latent(θ, X, U0, p, i)            # generic
     uprev = U0
     U = [uprev]
-    for i in eachindex(X)
-        u = sample(Weights(Ki(θ,X[i],p)[uprev,:]))         # Generate sample from previous state
+    for m in eachindex(X)
+        u = sample(Weights(Ki(θ,X[m],p, i)[uprev,:]))         # Generate sample from previous state
         push!(U, copy(u))
         uprev = u
     end    
@@ -150,14 +152,14 @@ end
 
     Compute loglikelihood and h-vectors from the backward information filter, for one ObservationTrajectory
 """
-function loglik_and_bif(θ, 𝒪::ObservationTrajectory,p) # generic
+function loglik_and_bif(θ, 𝒪::ObservationTrajectory, p, i) # generic
     @unpack X, Y = 𝒪
     N = length(Y) 
     h = h_from_observation(θ, Y[N], p)
     H = [h]
     loglik = zero(θ[1][1])
-    for i in N:-1:2
-        h = pullback(θ, X[i], h) .* h_from_observation(θ, Y[i-1], p)
+    for m in N:-1:2
+        h = pullback(θ, X[m], h, i) .* h_from_observation(θ, Y[m-1], p)
         h, c = normalise(h)
         loglik += c
         pushfirst!(H, copy(ForwardDiff.value.(h)))
@@ -171,13 +173,13 @@ end
 
     Returns loglikelihood at θ for one ObservationTrajectory
 """    
-function loglik(θ, 𝒪::ObservationTrajectory, p) # generic
+function loglik(θ, 𝒪::ObservationTrajectory, p, i) # generic
     @unpack X, Y = 𝒪
     N = length(Y) 
     h = h_from_observation(θ, Y[N], p)
     loglik = zero(θ[1][1])
-    for i in N:-1:2
-        h = pullback(θ, X[i], h) .* h_from_observation(θ, Y[i-1], p)
+    for m in N:-1:2
+        h = pullback(θ, X[m], h, i) .* h_from_observation(θ, Y[m-1], p)
         h, c = normalise(h)
         loglik += c
     end
@@ -193,7 +195,7 @@ end
 function loglik(θ, 𝒪s::Vector, p) # generic
     ll = zero(θ[1][1])
     for i ∈ eachindex(𝒪s)
-        ll += loglik(θ, 𝒪s[i], p)
+        ll += loglik(θ, 𝒪s[i], p, i)
     end
     ll 
 end
@@ -208,8 +210,8 @@ function sample_guided(θ, 𝒪, H, p)              # Generate approximate track
     N = length(H) # check -1?
     uprev = sample(Weights(Πroot(X[1], p) .* H[1])) # Weighted prior distribution
     uᵒ = [uprev]
-    for i=2:N
-        w = Ki(θ,X[i], p)[uprev,:] .* H[i]         # Weighted transition density
+    for m=2:N
+        w = Ki(θ,X[m], p, i)[uprev,:] .* H[m]         # Weighted transition density
         u = sample(Weights(w))
         push!(uᵒ, u)
         uprev = u

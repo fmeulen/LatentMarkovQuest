@@ -19,14 +19,17 @@ types= Dict(3=>Float64,4=>Float64,5=>Float64,6=>Int64,7=>Int64,8=>Int64,9=>Int64
 # x: (sport,strength,competition), cols 3:5
 # y: (participation, modification, performance, symptoms), cols 6:9 (on binary scale)
 
-p = Pars(NUM_HIDDENSTATES = 3, DIM_COVARIATES= 4, DIM_RESPONSE = 4)
+n = 24
+p = Pars(NUM_HIDDENSTATES = 3, DIM_COVARIATES= 27, DIM_RESPONSE = 4)
 
 TX = Union{Missing, SVector{p.DIM_COVARIATES,Float64}} # indien er missing vals zijn 
 TY = Union{Missing, SVector{p.DIM_RESPONSE, Int64}}
 
 isanymissing(x) = maximum(ismissing.(x))  
 
-n = 24
+n = 24  # nr of athletes
+count_missingX = 0
+count_missingY = 0
 𝒪s = ObservationTrajectory{TX,TY}[]
 for i ∈ 1:n
     di = d[d.ID .== i, :]
@@ -36,12 +39,14 @@ for i ∈ 1:n
         x = SA[1.0, r[3], r[4], r[5]]  # include intercept
         if isanymissing(x)
             push!(X, missing)
+            count_missingX += 1
         else
             push!(X, x)
         end
         y = SA[r[6]+1, r[7]+1, r[8]+1, r[9]+1]
         if isanymissing(y)
             push!(Y, missing)
+            count_missingY += 1
         else
             push!(Y, y)
         end
@@ -50,10 +55,12 @@ for i ∈ 1:n
 end    
 
 model = logtarget(ztype, 𝒪s, p);
-
+#model = logtarget_large(ztype, 𝒪s, p);
 
 #--------------- map -----------------------
 @time map_estimate = optimize(model, MAP());
+#coeftable(map_estimate)
+
 θmap = convert_turingoutput(ztype, map_estimate, p);
 
 @show θmap[:γ12] 
@@ -71,6 +78,7 @@ savefig(wd*"/figs/olympic_histograms_traces.pdf")
 histogram(chain)
 savefig(wd*"/figs/histograms_traces.pdf")
 
+summarize(chain; sections=[:parameters])
 
 # extract posterior mean from mcmc output
 θs = describe(chain)[1].nt.mean
@@ -104,7 +112,7 @@ end
 
 # save objects 
 jldsave("ex_olympicathletes.jld2"; 𝒪s, model, θpm, λs, chain, ztype)
-
+jldsave("ex_olympicathletes_large.jld2"; 𝒪s, model, θpm, λs, chain, ztype)
 
 ### to open again
 aa = jldopen("ex_olympicathletes.jld2")
@@ -119,19 +127,20 @@ aa["𝒪s"]
 # chain.value.data 500×32×3 Array{Float64, 3}, so this contains the iterates from the 3 chains
 
 chain = aa["chain"] # if read via jldopen
-vals = vcat(chain.value.data[:,:,1], chain.value.data[:,:,2], chain.value.data[:,:,3]) # merge all iterates
+# vals = vcat(chain.value.data[:,:,1], chain.value.data[:,:,2], chain.value.data[:,:,3]) # merge all iterates
+vals = DataFrame(chain)
 names = vcat(chain.name_map.parameters, chain.name_map.internals)
 
 
 # set training load and initial latent status
 trainingload = CSV.read("Covariates.csv", DataFrame)
 X = [SA[x...] for x in eachcol(trainingload)]
-U0 = 2 # presently assumed latent state
+U0 = 3 # presently assumed latent state
 
 scenarios = Vector{Int64}[]
 for i ∈ 1:size(vals)[1]
-    γup = vals[i, 1:4]
-    γdown = vals[i, 5:8]
+    γup = vals[i, 3:6]
+    γdown = vals[i, 7:10]
     θ =  ComponentArray(γ12=γup, γ21=γdown, γ23=γup, γ32=γdown)
     latentpath = sample_latent(θ, X, U0, p)
     push!(scenarios, latentpath)
@@ -163,3 +172,14 @@ dbar %>%  ggplot(aes(x=x,y=y, fill=state)) + geom_bar(stat="identity") + labs(x=
 scale_x_continuous(breaks=0:10)
 ggsave("forward_latent.pdf", width=6, height=2.5)
 """
+
+
+
+# following converts all Z values to λ values
+λiters = [vcat( mapZtoλ(vals[i,11:13]), 
+              mapZtoλ(vals[i,14:16]), 
+              mapZtoλ(vals[i,17:19]), 
+              mapZtoλ(vals[i,20:22]))  
+        for i in 1:size(vals)[1] ]
+
+λiters =  hcat(λiters...)'
