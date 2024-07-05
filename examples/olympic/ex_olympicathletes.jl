@@ -1,6 +1,11 @@
+# to show full output of x, do   "show(stdout, "text/plain", x)"
+
 using CSV
 using DataFrames
 using JLD2 
+using ReverseDiff
+using Tidier
+#using Zygote
 
 wd = @__DIR__
 cd(wd)
@@ -8,28 +13,29 @@ cd(wd)
 # Prior on root node (x can be inital state)
 Πroot(_, p) = (@SVector ones(p.NUM_HIDDENSTATES))/p.NUM_HIDDENSTATES    
 
+isanymissing(x) = maximum(ismissing.(x))  # helper function to deal with missing vals
 
-restricted = false
-ztype = restricted ? Restricted() : Unrestricted() 
-
-# read water polo data
-d = CSV.read("olympic_athletes.csv", DataFrame; delim=",", missingstring="NA",
+#--------------------------- read water polo data
+dfull = CSV.read("olympic_athletes_standardised.csv", DataFrame; delim=",", missingstring="NA",
 types= Dict(3=>Float64,4=>Float64,5=>Float64,6=>Int64,7=>Int64,8=>Int64,9=>Int64)) 
-
 # x: (sport,strength,competition), cols 3:5
 # y: (participation, modification, performance, symptoms), cols 6:9 (on binary scale)
 
-n = 24
-p = Pars(NUM_HIDDENSTATES = 3, DIM_COVARIATES= 27, DIM_RESPONSE = 4)
+# remove rows where we have no data, these are rows where columns 3:10 are missing
+# originally, missing values were added because LMest can only work with rectangular data
+dfull_miss = ismissing.(dfull)
+keep = [sum(x) <8 for x in eachrow(dfull_miss)]  # if equal to 1 keep that data
+d = dfull[keep .== 1, :]
 
-TX = Union{Missing, SVector{p.DIM_COVARIATES,Float64}} # indien er missing vals zijn 
+
+n = 24
+p = Pars(NUM_HIDDENSTATES = 3, DIM_COVARIATES= 3, DIM_RESPONSE = 4) 
+
+# turn the data into a vector of type ObservationTrajectory
+TX = Union{Missing, SVector{p.DIM_COVARIATES+1,Float64}} # indien er missing vals zijn 
 TY = Union{Missing, SVector{p.DIM_RESPONSE, Int64}}
 
-isanymissing(x) = maximum(ismissing.(x))  
-
 n = 24  # nr of athletes
-count_missingX = 0
-count_missingY = 0
 𝒪s = ObservationTrajectory{TX,TY}[]
 for i ∈ 1:n
     di = d[d.ID .== i, :]
@@ -37,16 +43,15 @@ for i ∈ 1:n
     Y = TY[]
     for r in eachrow(di)
         x = SA[1.0, r[3], r[4], r[5]]  # include intercept
+        #x = SA[r[3], r[4], r[5]]  # no intercept
         if isanymissing(x)
             push!(X, missing)
-            count_missingX += 1
         else
             push!(X, x)
         end
         y = SA[r[6]+1, r[7]+1, r[8]+1, r[9]+1]
         if isanymissing(y)
             push!(Y, missing)
-            count_missingY += 1
         else
             push!(Y, y)
         end
@@ -54,23 +59,32 @@ for i ∈ 1:n
     push!(𝒪s, ObservationTrajectory(X,Y))
 end    
 
+# count missing values in either covariates or responses
+countmissing(x,y) = [mean(ismissing.(x)), mean(ismissing.(y))]
+miss = map(o -> countmissing(o.X, o.Y), 𝒪s)
+@show miss
+#scatter(first.(miss), last.(miss))
+
+
+restricted = false
+ztype = restricted ? Restricted() : Unrestricted() 
 model = logtarget(ztype, 𝒪s, p);
-#model = logtarget_large(ztype, 𝒪s, p);
 
 #--------------- map -----------------------
-@time map_estimate = optimize(model, MAP());
-#coeftable(map_estimate)
+@time map_estimate = maximum_a_posteriori(model)
+
+#mle_estimate = maximum_likelihood(model)
+#coeftable(mle_estimate)
 
 θmap = convert_turingoutput(ztype, map_estimate, p);
-
 @show θmap[:γ12] 
 @show θmap[:γ21] 
-
 @show mapallZtoλ(θmap)'
 
 # ----------- mcmc ---------------------------
-sampler =  NUTS() 
-@time chain = sample(model, sampler, MCMCDistributed(), 500, 3; progress=true);
+sampler = Turing.NUTS(adtype=AutoReverseDiff())
+
+@time chain = sample(model, sampler, MCMCThreads(), 1000, 2; progress=true)#, initial_params=map_estimate.values.array);
 
 plot(chain)
 savefig(wd*"/figs/olympic_histograms_traces.pdf")
@@ -78,30 +92,38 @@ savefig(wd*"/figs/olympic_histograms_traces.pdf")
 histogram(chain)
 savefig(wd*"/figs/histograms_traces.pdf")
 
-summarize(chain; sections=[:parameters])
+CSV.write(wd*"/figs/iterates.csv", DataFrame(chain))
+
+summ = summarize(chain; sections=[:parameters])
+show(stdout, "text/plain", summ)
+
+CSV.write(wd*"/figs/posterior_summary.csv", DataFrame(summ))
 
 # extract posterior mean from mcmc output
 θs = describe(chain)[1].nt.mean
 names = String.(describe(chain)[1].nt.parameters)
 
 @warn "We assume here 4 questions (hence Z1,...,Z4). Adapt if different"
+
+σ²_ = θs[occursin.("σ²", names)]
+σα²_ = θs[occursin.("σα²", names)]
+αup_ = θs[occursin.("αup", names)]
+αdown_ = θs[occursin.("αdown", names)]
+γup_ = θs[occursin.("γup", names)]
+γdown_ = θs[occursin.("γdown", names)]
 if restricted 
-    γup_ = θs[occursin.("γup", names)]
-    γdown_ = θs[occursin.("γdown", names)]
     Z1_ = θs[occursin.("Z0", names)]
     Z2_ = θs[occursin.("Z0", names)]
     Z3_ = θs[occursin.("Z0", names)]
     Z4_ = θs[occursin.("Z0", names)]
-    θpm = ComponentArray(γ12=γup_, γ21=γdown_, Z1=Z1_, Z2=Z2_, Z3=Z3_, Z4=Z4_)
 else
-    γup_ = θs[occursin.("γup", names)]
-    γdown_ = θs[occursin.("γdown", names)]
     Z1_ = θs[occursin.("Z1", names)]
     Z2_ = θs[occursin.("Z2", names)]
     Z3_ = θs[occursin.("Z3", names)]
     Z4_ = θs[occursin.("Z4", names)]
-    θpm = ComponentArray(γ12=γup_, γ21=γdown_, Z1=Z1_, Z2=Z2_, Z3=Z3_, Z4=Z4_)
 end
+θpm = ComponentArray(σ²=σ²_, σα²=σα²_, αup=αup_, αdown=αdown_,  γ12=γup_, γ21=γdown_, Z1=Z1_, Z2=Z2_, Z3=Z3_, Z4=Z4_)
+   
 
 λs = mapallZtoλ(θpm)'
 @show λs
@@ -111,7 +133,7 @@ end
 @show θpm[:γ21]
 
 # save objects 
-jldsave("ex_olympicathletes.jld2"; 𝒪s, model, θpm, λs, chain, ztype)
+jldsave("ex_olympicathletes.jld2"; 𝒪s, model, θpm, λs, chain, ztype, map_estimate, mle_estimate)
 jldsave("ex_olympicathletes_large.jld2"; 𝒪s, model, θpm, λs, chain, ztype)
 
 ### to open again

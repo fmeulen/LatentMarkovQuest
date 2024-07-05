@@ -11,39 +11,23 @@ end
 
 ObservationTrajectory(X, _) = ObservationTrajectory(X, fill(SA[1,1,1,1], length(X)))  # constructor if only X is given
 
-"""
-    Ki(θ,x,p)
-
-    create transition probability matrix when parameter is θ and state is x
-"""    
-Ki(θ, x, p, i)= SMatrix{p.NUM_HIDDENSTATES,p.NUM_HIDDENSTATES}(  #not generic, restrict transitions to neighboring states
-    α = θ.α[i]
-    γ12 = SA[α, θ.γ12...]
-    γ23 = SA[α, θ.γ23...]
-    γ12 = SA[α, θ.γ12...]
-    γ23 = SA[α, θ.γ23...]
-    NNlib.softmax([0.0 dot(x,γ12) -Inf64; 
-                    dot(x,γ21) 0.0 dot(x,γ23);
-                     -Inf64 dot(x,γ32) 0.0];dims=2) ) 
-    
-Ki(_,::Missing, p, i) = SMatrix{p.NUM_HIDDENSTATES,p.NUM_HIDDENSTATES}(1.0I) #generic
  
 """
     pullback(θ,x,h)  
         
     returns  Ki(θ,x)*h
 """
-function pullback(θ,x,h, i) # not generic
+function pullback(θ, x, p, i, h)   #pullback(θ,x,h, i) # not generic
     Ki(θ, x, p, i) * h
 end
 
 """
-    pullback(_, ::Missing, h)
+    pullback(θ, ::Missing, p, h, i)
 
     returns pullback in case covariates are missing
     as we assume no state change in this case, this simply returns h
 """
-pullback(_, ::Missing, h, i) = h
+pullback(θ, ::Missing, p, h, i) = h
 
 # mapping Z to λ (prior construction on λs)
 scaledandshifted_logistic(x) = 2.0logistic(.75*x) - 1.0 # function that maps [0,∞) to [0,1) 
@@ -159,7 +143,7 @@ function loglik_and_bif(θ, 𝒪::ObservationTrajectory, p, i) # generic
     H = [h]
     loglik = zero(θ[1][1])
     for m in N:-1:2
-        h = pullback(θ, X[m], h, i) .* h_from_observation(θ, Y[m-1], p)
+        h = pullback(θ, X[m], p, i, h) .* h_from_observation(θ, Y[m-1], p)
         h, c = normalise(h)
         loglik += c
         pushfirst!(H, copy(ForwardDiff.value.(h)))
@@ -167,6 +151,7 @@ function loglik_and_bif(θ, 𝒪::ObservationTrajectory, p, i) # generic
     loglik += log(dot(h, Πroot(X[1], p)))
     (ll=loglik, H=H)          
 end
+
 
 """
     loglik(θ, 𝒪::ObservationTrajectory) 
@@ -179,7 +164,10 @@ function loglik(θ, 𝒪::ObservationTrajectory, p, i) # generic
     h = h_from_observation(θ, Y[N], p)
     loglik = zero(θ[1][1])
     for m in N:-1:2
-        h = pullback(θ, X[m], h, i) .* h_from_observation(θ, Y[m-1], p)
+        # println("dafadfadfadsfadfadsfadsfads======================")
+        # @show  pullback(θ, X[m], p, i, h)
+        # @show h_from_observation(θ, Y[m-1], p)
+        h = pullback(θ, X[m], p, i, h) .* h_from_observation(θ, Y[m-1], p)
         h, c = normalise(h)
         loglik += c
     end

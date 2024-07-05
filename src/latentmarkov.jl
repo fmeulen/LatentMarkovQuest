@@ -5,13 +5,13 @@ cd(wdir)
 #outdir= joinpath(wdir, "out")
 
 using StatsBase, Plots, LinearAlgebra
-using Optim
+#using Optim
 using ForwardDiff
 using Distributions
 using ComponentArrays
 using StatsFuns  # for softmax
 using Random
-using DynamicHMC
+#using DynamicHMC
 using UnPack
 using Turing
 using StatsPlots # required for Turing plots
