@@ -59,6 +59,8 @@ for i ∈ 1:n
     push!(𝒪s, ObservationTrajectory(X,Y))
 end    
 
+map(x-> length(x.X), 𝒪s)
+
 # count missing values in either covariates or responses
 countmissing(x,y) = [mean(ismissing.(x)), mean(ismissing.(y))]
 miss = map(o -> countmissing(o.X, o.Y), 𝒪s)
@@ -66,15 +68,23 @@ miss = map(o -> countmissing(o.X, o.Y), 𝒪s)
 #scatter(first.(miss), last.(miss))
 
 
+𝒪s_small = copy(𝒪s)
+deleteat!(𝒪s_small, 2:24)
+
 restricted = false
 ztype = restricted ? Restricted() : Unrestricted() 
 model = logtarget(ztype, 𝒪s, p);
 
 #--------------- map -----------------------
 @time map_estimate = maximum_a_posteriori(model)
+show(stdout, "text/plain", map_estimate.values)
 
-#mle_estimate = maximum_likelihood(model)
-#coeftable(mle_estimate)
+
+mle_estimate = maximum_likelihood(model)
+coeftable(mle_estimate)
+
+
+show(stdout, "text/plain", mle_estimate.values)
 
 θmap = convert_turingoutput(ztype, map_estimate, p);
 @show θmap[:γ12] 
@@ -84,7 +94,8 @@ model = logtarget(ztype, 𝒪s, p);
 # ----------- mcmc ---------------------------
 sampler = Turing.NUTS(adtype=AutoReverseDiff())
 
-@time chain = sample(model, sampler, MCMCThreads(), 1000, 2; progress=true)#, initial_params=map_estimate.values.array);
+sampler = Turing.NUTS()
+@time chain = sample(model, sampler, MCMCThreads(), 2000, 3; progress=true)#, initial_params=map_estimate.values.array);
 
 plot(chain)
 savefig(wd*"/figs/olympic_histograms_traces.pdf")
@@ -133,7 +144,7 @@ end
 @show θpm[:γ21]
 
 # save objects 
-jldsave("ex_olympicathletes.jld2"; 𝒪s, model, θpm, λs, chain, ztype, map_estimate, mle_estimate)
+jldsave("ex_olympicathletes.jld2"; 𝒪s, model, θpm, λs, chain, ztype, map_estimate)
 jldsave("ex_olympicathletes_large.jld2"; 𝒪s, model, θpm, λs, chain, ztype)
 
 ### to open again
@@ -205,3 +216,19 @@ ggsave("forward_latent.pdf", width=6, height=2.5)
         for i in 1:size(vals)[1] ]
 
 λiters =  hcat(λiters...)'
+
+
+
+
+
+𝒪 = 𝒪s[24]
+pp1 = plot(getindex.(𝒪.X,2))
+pp2 = plot(getindex.(𝒪.X,3))
+pp3 = plot(getindex.(𝒪.X,4))
+pp4 = plot(getindex.(𝒪.Y,1))
+pp5 = plot(getindex.(𝒪.Y,2))
+pp6 = plot(getindex.(𝒪.Y,3))
+pp7 = plot(getindex.(𝒪.Y,4))
+plot(pp1, pp2, pp3, pp4, pp5, pp6, pp7)
+
+# few changes: 1(0), 14(1), 16(1), 

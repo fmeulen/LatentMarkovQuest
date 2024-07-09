@@ -43,11 +43,11 @@ mapZtoλ(x) = scaledandshifted_logistic.(cumsum(x))
 """
 function response(Z) # not generic
         λ = mapZtoλ(Z)
-        SA[ one(λ[1])-λ[1] λ[1];  one(λ[2])-λ[2] λ[2];  one(λ[3])-λ[3] λ[3]]
+        SA[ one(λ[1])-λ[1] λ[1];  one(λ[2])-λ[2] λ[2];  one(λ[3])-λ[3] λ[3]]  # 3 latent states
 end
 
 
-Λi(θ) = SA[ response(θ.Z1), response(θ.Z2), response(θ.Z3), response(θ.Z4)    ]    # not generic
+Λi(θ) = SA[ response(θ.Z1), response(θ.Z2), response(θ.Z3), response(θ.Z4)    ]    # not generic, 4 questions
 
 """
     sample_observation(Λ, u)
@@ -116,7 +116,7 @@ function h_from_observation(θ, y, _) # not generic
     h_from_one_observation(Λ[1],y[1]) .* h_from_one_observation(Λ[2],y[2]) .* h_from_one_observation(Λ[3],y[3]) .* h_from_one_observation(Λ[4],y[4])
 end
 
-h_from_observation(_, ::Missing,p) =  @SVector ones(p.NUM_HIDDENSTATES) # generic
+h_from_observation(_, ::Missing, p) =  @SVector ones(p.NUM_HIDDENSTATES) # generic
 
 
 """
