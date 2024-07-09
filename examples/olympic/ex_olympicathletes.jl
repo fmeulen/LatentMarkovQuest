@@ -29,10 +29,10 @@ d = dfull[keep .== 1, :]
 
 
 n = 24
-p = Pars(NUM_HIDDENSTATES = 3, DIM_COVARIATES= 3, DIM_RESPONSE = 4) 
+p = Pars(NUM_HIDDENSTATES = 3, DIM_COVARIATES= 4, DIM_RESPONSE = 4) 
 
 # turn the data into a vector of type ObservationTrajectory
-TX = Union{Missing, SVector{p.DIM_COVARIATES+1,Float64}} # indien er missing vals zijn 
+TX = Union{Missing, SVector{p.DIM_COVARIATES,Float64}} # indien er missing vals zijn 
 TY = Union{Missing, SVector{p.DIM_RESPONSE, Int64}}
 
 n = 24  # nr of athletes
@@ -68,8 +68,6 @@ miss = map(o -> countmissing(o.X, o.Y), 𝒪s)
 #scatter(first.(miss), last.(miss))
 
 
-𝒪s_small = copy(𝒪s)
-deleteat!(𝒪s_small, 2:24)
 
 restricted = false
 ztype = restricted ? Restricted() : Unrestricted() 
