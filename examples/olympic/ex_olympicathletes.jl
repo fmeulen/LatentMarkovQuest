@@ -115,11 +115,11 @@ names = String.(describe(chain)[1].nt.parameters)
 @warn "We assume here 4 questions (hence Z1,...,Z4). Adapt if different"
 
 σ²_ = θs[occursin.("σ²", names)]
-σα²_ = θs[occursin.("σα²", names)]
-αup_ = θs[occursin.("αup", names)]
-αdown_ = θs[occursin.("αdown", names)]
-γup_ = θs[occursin.("γup", names)]
-γdown_ = θs[occursin.("γdown", names)]
+
+γ12_ = θs[occursin.("γ12", names)]
+γ23_ = θs[occursin.("γ23", names)]
+γ21_ = θs[occursin.("γ21", names)]
+γ32_ = θs[occursin.("γ32", names)]
 if restricted 
     Z1_ = θs[occursin.("Z0", names)]
     Z2_ = θs[occursin.("Z0", names)]
@@ -131,7 +131,7 @@ else
     Z3_ = θs[occursin.("Z3", names)]
     Z4_ = θs[occursin.("Z4", names)]
 end
-θpm = ComponentArray(σ²=σ²_, σα²=σα²_, αup=αup_, αdown=αdown_,  γ12=γup_, γ21=γdown_, Z1=Z1_, Z2=Z2_, Z3=Z3_, Z4=Z4_)
+θpm = ComponentArray(σ²=σ²_,   γ12=γ12_, γ23=γ23_, γ21=γ21_, γ32=γ32_, Z1=Z1_, Z2=Z2_, Z3=Z3_, Z4=Z4_)
    
 
 λs = mapallZtoλ(θpm)'
@@ -143,7 +143,7 @@ end
 
 # save objects 
 jldsave("ex_olympicathletes.jld2"; 𝒪s, model, θpm, λs, chain, ztype, map_estimate)
-jldsave("ex_olympicathletes_large.jld2"; 𝒪s, model, θpm, λs, chain, ztype)
+#jldsave("ex_olympicathletes_large.jld2"; 𝒪s, model, θpm, λs, chain, ztype)
 
 ### to open again
 aa = jldopen("ex_olympicathletes.jld2")
@@ -170,10 +170,13 @@ U0 = 3 # presently assumed latent state
 
 scenarios = Vector{Int64}[]
 for i ∈ 1:size(vals)[1]
-    γup = vals[i, 3:6]
-    γdown = vals[i, 7:10]
-    θ =  ComponentArray(γ12=γup, γ21=γdown, γ23=γup, γ32=γdown)
-    latentpath = sample_latent(θ, X, U0, p)
+    γ12 = collect(vals[i, 4:7])
+    γ23 = collect(vals[i, 8:11])
+    γ21 = collect(vals[i, 12:15])
+    γ32 = collect(vals[i, 16:19])
+
+    θ =  ComponentArray(γ12=γ12, γ21=γ21, γ23=γ23, γ32=γ32)
+    latentpath = sample_latent(θ, X, U0, p,i)
     push!(scenarios, latentpath)
 end
 
