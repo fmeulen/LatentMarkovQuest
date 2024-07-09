@@ -5,7 +5,7 @@ using DataFrames
 using JLD2 
 using ReverseDiff
 using Tidier
-#using Zygote
+
 
 wd = @__DIR__
 cd(wd)
@@ -14,7 +14,7 @@ cd(wd)
 Πroot(_, p) = (@SVector ones(p.NUM_HIDDENSTATES))/p.NUM_HIDDENSTATES    
 
 isanymissing(x) = maximum(ismissing.(x))  # helper function to deal with missing vals
-
+ 
 #--------------------------- read water polo data
 dfull = CSV.read("olympic_athletes_standardised.csv", DataFrame; delim=",", missingstring="NA",
 types= Dict(3=>Float64,4=>Float64,5=>Float64,6=>Int64,7=>Int64,8=>Int64,9=>Int64)) 
@@ -164,8 +164,9 @@ names = vcat(chain.name_map.parameters, chain.name_map.internals)
 
 
 # set training load and initial latent status
-trainingload = CSV.read("Covariates.csv", DataFrame)
-X = [SA[x...] for x in eachcol(trainingload)]
+trainingload = CSV.read("Covariates_standardised.csv", DataFrame)
+
+X = [SA[x...] for x in eachrow(trainingload)]
 U0 = 3 # presently assumed latent state
 
 scenarios = Vector{Int64}[]
