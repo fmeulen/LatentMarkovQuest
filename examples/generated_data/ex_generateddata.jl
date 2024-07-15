@@ -23,7 +23,7 @@ Z4 = [0.5, 1.0, 1.5]
 
 Z = [0.5, 1.0, 1.5]
 
-restricted = true#false
+restricted = false
 θ0 =  restricted ? ComponentArray(γ12 = γup, γ21 = γdown, γ23 = γup, γ32 = γdown, Z1=Z, Z2=Z, Z3=Z, Z4=Z) : ComponentArray(γ12 = γup, γ21 = γdown, γ23 = γup, γ32 = γdown, Z1=Z1, Z2=Z2, Z3=Z3, Z4=Z4)
 
 ztype = restricted ? Restricted() : Unrestricted() 
@@ -62,7 +62,7 @@ if INCLUDE_MISSING
             end
             X[3] = missing
         end
-        U, Y =  sample(θ0, X, p) 
+        U, Y =  sample(θ0, X, p, 1) 
         push!(Us, U)
         YY = TY[]
         push!(YY, missing) 
@@ -91,7 +91,7 @@ else
                 push!(X, SA[slope*t + 0.1*randn(), 1.0])
             end
         end
-        U, Y =  sample(θ0, X, p) 
+        U, Y =  sample(θ0, X, p, 1) 
         push!(Us, U)
         YY = TY[]
         for t in  1:T
@@ -183,8 +183,13 @@ model = logtarget(ztype, 𝒪s, p);
 
 
 #--------------- map -----------------------
-@time map_estimate = optimize(model, MAP());
-θmap = convert_turingoutput(ztype, map_estimate, p);
+@time map_estimate = maximum_a_posteriori(model)
+show(stdout, "text/plain", map_estimate.values)
+
+# extract estimates in component array
+names_map = String.(names(map_estimate.values)[1])
+θmapval = map_estimate.values
+θmap = getpars(θmapval, names_map)
 @show mapallZtoλ(θ0)'
 @show mapallZtoλ(θmap)'
 
@@ -194,18 +199,6 @@ model = logtarget(ztype, 𝒪s, p);
 @show θ0[:γ21] 
 θmap[:γ21]
 
-#--------------- mle -----------------------
-@time mle_estimate = optimize(model, MLE(), NelderMead())
-#@edit optimize(model, MLE(), NelderMead())
-θmle = convert_turingoutput(ztype, mle_estimate, p);
-@show mapallZtoλ(θ0)'
-@show mapallZtoλ(θmle)'
-
-@show θ0[:γ12] 
-θmle[:γ12]
-
-@show θ0[:γ21] 
-θmle[:γ21]
 
 
 ForwardDiff.gradient(loglik(𝒪s, p), θ0)
@@ -221,7 +214,7 @@ sampler =  NUTS()
 #sampler = HMC(0.01,10)
 
 # if initial ϵ=0.05 works.
-@time chain = sample(model, sampler, MCMCDistributed(), 500, 3; progress=true);
+@time chain = sample(model, sampler, MCMCDistributed(), 500, 5; progress=true);
 
 # plotting 
 histogram(chain)
@@ -231,26 +224,10 @@ savefig(wd*"/figs/histograms_traces.pdf")
 
 # extract posterior mean from mcmc output
 θs = describe(chain)[1].nt.mean
-names = String.(describe(chain)[1].nt.parameters)
-
-@warn "We assume here 4 questions (hence Z1,...,Z4). Adapt if different"
-if restricted 
-    γup_ = θs[occursin.("γup", names)]
-    γdown_ = θs[occursin.("γdown", names)]
-    Z1_ = θs[occursin.("Z0", names)]
-    Z2_ = θs[occursin.("Z0", names)]
-    Z3_ = θs[occursin.("Z0", names)]
-    Z4_ = θs[occursin.("Z0", names)]
-    θpm = ComponentArray(γ12=γup_, γ21=γdown_, Z1=Z1_, Z2=Z2_, Z3=Z3_, Z4=Z4_)
-else
-    γup_ = θs[occursin.("γup", names)]
-    γdown_ = θs[occursin.("γdown", names)]
-    Z1_ = θs[occursin.("Z1", names)]
-    Z2_ = θs[occursin.("Z2", names)]
-    Z3_ = θs[occursin.("Z3", names)]
-    Z4_ = θs[occursin.("Z4", names)]
-    θpm = ComponentArray(γ12=γup_, γ21=γdown_, Z1=Z1_, Z2=Z2_, Z3=Z3_, Z4=Z4_)
-end
+names_par = String.(describe(chain)[1].nt.parameters)
+θpm = getpars(θs, names_par)
+λs = mapallZtoλ(θpm)'
+@show λs
 
 # compare posterior means to true values
 @show mapallZtoλ(θpm)'
@@ -272,9 +249,9 @@ end
 #     dpi=300, size=(900, 900))
 
 
-# γsymb=[Symbol("γup[1]"), Symbol("γup[2]"), Symbol("γdown[1]"), Symbol("γdown[2]")]
+ γsymb=[Symbol("γ12[1]"), Symbol("γ12[2]"), Symbol("γ23[1]"), Symbol("γ23[2]")]
 
-# plot(chain[γsymb])
+ plot(chain[γsymb])
 # savefig(joinpath(packdir,"figs/gammas.pdf"))
 
 

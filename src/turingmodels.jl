@@ -39,13 +39,21 @@ struct Unrestricted <: Ztype end # # separate λ for all questions
 # end
 
 @model function logtarget(::Unrestricted, 𝒪s, p)
-    σ² ~ truncated(Cauchy(0, 2), 0, Inf)
+    #σ² ~ truncated(Cauchy(0, 2), 0, Inf)
+    #σ² ~ Exponential(2.0)
+    #σ² = 4
+
+    # γ12 ~ filldist(Normal(0,sqrt(σ²)), p.DIM_COVARIATES)
+    # γ23 ~ filldist(Normal(0,sqrt(σ²)), p.DIM_COVARIATES)
+    # γ21 ~ filldist(Normal(0,sqrt(σ²)), p.DIM_COVARIATES)  
+    # γ32 ~ filldist(Normal(0,sqrt(σ²)), p.DIM_COVARIATES)  
     
-    γ12 ~ filldist(Normal(0,sqrt(σ²)), p.DIM_COVARIATES)
-    γ23 ~ filldist(Normal(0,sqrt(σ²)), p.DIM_COVARIATES)
-    γ21 ~ filldist(Normal(0,sqrt(σ²)), p.DIM_COVARIATES)  
-    γ32 ~ filldist(Normal(0,sqrt(σ²)), p.DIM_COVARIATES)  
-    
+    γ12 ~ filldist(Normal(0.0, 1.5), p.DIM_COVARIATES)
+    γ23 ~ filldist(Normal(0.0, 1.5), p.DIM_COVARIATES)
+    γ21 ~ filldist(Normal(0.0, 1.5), p.DIM_COVARIATES)  
+    γ32 ~ filldist(Normal(0.0, 1.5), p.DIM_COVARIATES)  
+
+
     Z1 ~ filldist(Exponential(), p.NUM_HIDDENSTATES) 
     Z2 ~ filldist(Exponential(), p.NUM_HIDDENSTATES) 
     Z3 ~ filldist(Exponential(), p.NUM_HIDDENSTATES) 

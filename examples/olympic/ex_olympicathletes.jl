@@ -5,6 +5,7 @@ using DataFrames
 using JLD2 
 using ReverseDiff
 using Tidier
+using RCall
 
 
 wd = @__DIR__
@@ -67,88 +68,84 @@ miss = map(o -> countmissing(o.X, o.Y), 𝒪s)
 @show miss
 #scatter(first.(miss), last.(miss))
 
+# visualisation of the data
+𝒪 = 𝒪s[24]
+pp1 = plot(getindex.(𝒪.X,2))
+pp2 = plot(getindex.(𝒪.X,3))
+pp3 = plot(getindex.(𝒪.X,4))
+pp4 = plot(getindex.(𝒪.Y,1))
+pp5 = plot(getindex.(𝒪.Y,2))
+pp6 = plot(getindex.(𝒪.Y,3))
+pp7 = plot(getindex.(𝒪.Y,4))
+plot(pp1, pp2, pp3, pp4, pp5, pp6, pp7)
 
 
+
+
+
+##### define the model
 restricted = false
 ztype = restricted ? Restricted() : Unrestricted() 
 model = logtarget(ztype, 𝒪s, p);
+
+
+
+
+
+
+
+
 
 #--------------- map -----------------------
 @time map_estimate = maximum_a_posteriori(model)
 show(stdout, "text/plain", map_estimate.values)
 
-
-mle_estimate = maximum_likelihood(model)
-coeftable(mle_estimate)
-
-
-show(stdout, "text/plain", mle_estimate.values)
-
-θmap = convert_turingoutput(ztype, map_estimate, p);
-@show θmap[:γ12] 
-@show θmap[:γ21] 
+# extract estimates in component array
+names_map = String.(names(map_estimate.values)[1])
+θmapval = map_estimate.values
+θmap = getpars(θmapval, names_map)
 @show mapallZtoλ(θmap)'
 
 # ----------- mcmc ---------------------------
-sampler = Turing.NUTS(adtype=AutoReverseDiff())
+#sampler = Turing.NUTS(adtype=AutoReverseDiff())
 
 sampler = Turing.NUTS()
-@time chain = sample(model, sampler, MCMCThreads(), 2000, 3; progress=true)#, initial_params=map_estimate.values.array);
+@time chain = sample(model, sampler, MCMCThreads(), 800, 5; progress=true)
 
 plot(chain)
 savefig(wd*"/figs/olympic_histograms_traces.pdf")
 
-histogram(chain)
-savefig(wd*"/figs/histograms_traces.pdf")
-
+# write output to CSV
 CSV.write(wd*"/figs/iterates.csv", DataFrame(chain))
-
 summ = summarize(chain; sections=[:parameters])
-show(stdout, "text/plain", summ)
+posterior_summary = DataFrame(summ)
+CSV.write(wd*"/figs/posterior_summary.csv", posterior_summary)
 
-CSV.write(wd*"/figs/posterior_summary.csv", DataFrame(summ))
+# show summary on console
+show(stdout, "text/plain", summ)
 
 # extract posterior mean from mcmc output
 θs = describe(chain)[1].nt.mean
-names = String.(describe(chain)[1].nt.parameters)
-
-@warn "We assume here 4 questions (hence Z1,...,Z4). Adapt if different"
-
-σ²_ = θs[occursin.("σ²", names)]
-
-γ12_ = θs[occursin.("γ12", names)]
-γ23_ = θs[occursin.("γ23", names)]
-γ21_ = θs[occursin.("γ21", names)]
-γ32_ = θs[occursin.("γ32", names)]
-if restricted 
-    Z1_ = θs[occursin.("Z0", names)]
-    Z2_ = θs[occursin.("Z0", names)]
-    Z3_ = θs[occursin.("Z0", names)]
-    Z4_ = θs[occursin.("Z0", names)]
-else
-    Z1_ = θs[occursin.("Z1", names)]
-    Z2_ = θs[occursin.("Z2", names)]
-    Z3_ = θs[occursin.("Z3", names)]
-    Z4_ = θs[occursin.("Z4", names)]
-end
-θpm = ComponentArray(σ²=σ²_,   γ12=γ12_, γ23=γ23_, γ21=γ21_, γ32=γ32_, Z1=Z1_, Z2=Z2_, Z3=Z3_, Z4=Z4_)
-   
-
+names_par = String.(describe(chain)[1].nt.parameters)
+θpm = getpars(θs, names_par)
 λs = mapallZtoλ(θpm)'
 @show λs
 
-@show θpm[:γ12]
-
-@show θpm[:γ21]
-
 # save objects 
 jldsave("ex_olympicathletes.jld2"; 𝒪s, model, θpm, λs, chain, ztype, map_estimate)
-#jldsave("ex_olympicathletes_large.jld2"; 𝒪s, model, θpm, λs, chain, ztype)
+
 
 ### to open again
 aa = jldopen("ex_olympicathletes.jld2")
 aa["𝒪s"]
 ###
+
+
+
+
+
+
+
 
 
 
@@ -158,9 +155,8 @@ aa["𝒪s"]
 # chain.value.data 500×32×3 Array{Float64, 3}, so this contains the iterates from the 3 chains
 
 chain = aa["chain"] # if read via jldopen
-# vals = vcat(chain.value.data[:,:,1], chain.value.data[:,:,2], chain.value.data[:,:,3]) # merge all iterates
 vals = DataFrame(chain)
-names = vcat(chain.name_map.parameters, chain.name_map.internals)
+names_ = vcat(chain.name_map.parameters, chain.name_map.internals)
 
 
 # set training load and initial latent status
@@ -195,7 +191,7 @@ end
 dbar = DataFrame(y= vcat(prs...), 
                  x = repeat(0:10, inner=3), 
                  state= repeat(["1", "2", "3"], outer=11))
-using RCall
+
 
 @rput dbar
 R"""
@@ -205,32 +201,24 @@ theme_set(mytheme)
 
 dbar %>%  ggplot(aes(x=x,y=y, fill=state)) + geom_bar(stat="identity") + labs(x="time", y="state") +
 scale_x_continuous(breaks=0:10)
-ggsave("forward_latent.pdf", width=6, height=2.5)
+ggsave("figs/forward_latent.pdf", width=6, height=2.5)
 """
 
 
 
 # following converts all Z values to λ values
-λiters = [vcat( mapZtoλ(vals[i,11:13]), 
-              mapZtoλ(vals[i,14:16]), 
-              mapZtoλ(vals[i,17:19]), 
-              mapZtoλ(vals[i,20:22]))  
-        for i in 1:size(vals)[1] ]
+# λiters = [vcat( mapZtoλ(vals[i,11:13]), 
+#               mapZtoλ(vals[i,14:16]), 
+#               mapZtoλ(vals[i,17:19]), 
+#               mapZtoλ(vals[i,20:22]))  
+#         for i in 1:size(vals)[1] ]
 
-λiters =  hcat(λiters...)'
-
-
+# λiters =  hcat(λiters...)'
 
 
 
-𝒪 = 𝒪s[24]
-pp1 = plot(getindex.(𝒪.X,2))
-pp2 = plot(getindex.(𝒪.X,3))
-pp3 = plot(getindex.(𝒪.X,4))
-pp4 = plot(getindex.(𝒪.Y,1))
-pp5 = plot(getindex.(𝒪.Y,2))
-pp6 = plot(getindex.(𝒪.Y,3))
-pp7 = plot(getindex.(𝒪.Y,4))
-plot(pp1, pp2, pp3, pp4, pp5, pp6, pp7)
 
-# few changes: 1(0), 14(1), 16(1), 
+
+
+
+

@@ -33,6 +33,9 @@ pullback(θ, ::Missing, p, h, i) = h
 scaledandshifted_logistic(x) = 2.0logistic(.75*x) - 1.0 # function that maps [0,∞) to [0,1) 
 mapZtoλ(x) = scaledandshifted_logistic.(cumsum(x))
 
+
+
+
 """
     response(Z) 
     
