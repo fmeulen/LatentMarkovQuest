@@ -41,7 +41,7 @@ posterior_summary %>% ggplot(aes(y=parameters, x=mean)) + geom_point() +
   geom_vline(xintercept = 0) 
 ggsave("figs/all_estimates.png", width=7, height=10)
 
-# alternative display
+# alternative displayx
 library(ggdist)
 iterates_long %>% ggplot(aes(x=value, y=parameter)) + stat_halfeye(fill="lightblue")+
   geom_vline(xintercept = 0) 
