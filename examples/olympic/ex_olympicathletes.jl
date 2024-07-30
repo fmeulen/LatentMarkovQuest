@@ -68,12 +68,11 @@ miss = map(o -> countmissing(o.X, o.Y), 𝒪s)
 #scatter(first.(miss), last.(miss))
 
 
-𝒪s_small = copy(𝒪s)
-deleteat!(𝒪s_small, 2:24)
 
 restricted = false
 ztype = restricted ? Restricted() : Unrestricted() 
-model = logtarget(ztype, 𝒪s, p);
+#model = logtarget(ztype, 𝒪s, p);
+model = logtarget_large(ztype, 𝒪s, p);
 
 #--------------- map -----------------------
 @time map_estimate = maximum_a_posteriori(model)
@@ -95,7 +94,7 @@ show(stdout, "text/plain", mle_estimate.values)
 sampler = Turing.NUTS(adtype=AutoReverseDiff())
 
 sampler = Turing.NUTS()
-@time chain = sample(model, sampler, MCMCThreads(), 2000, 3; progress=true)#, initial_params=map_estimate.values.array);
+@time chain = sample(model, sampler, MCMCThreads(), 500, 3; progress=true)#, initial_params=map_estimate.values.array);
 
 plot(chain)
 savefig(wd*"/figs/olympic_histograms_traces.pdf")
