@@ -139,6 +139,7 @@ names_par = String.(describe(chain)[1].nt.parameters)
 λs = mapallZtoλ(θpm)'
 @show λs
 
+
 # save objects 
 jldsave("ex_olympicathletes_final.jld2"; 𝒪s, model, θpm, λs, chain, ztype, map_estimate) 
 

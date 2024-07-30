@@ -41,8 +41,6 @@ struct Unrestricted <: Ztype end # # separate λ for all questions
 @model function logtarget(::Unrestricted, 𝒪s, p)
     #σ² ~ truncated(Cauchy(0, 2), 0, Inf)
     σ ~ Exponential(3.0)
-    #σ² = 4
-
     
     γ12 ~ filldist(Normal(0.0, σ), p.DIM_COVARIATES)
     γ23 ~ filldist(Normal(0.0, σ), p.DIM_COVARIATES)
