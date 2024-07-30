@@ -19,27 +19,8 @@ abstract type Ztype end
 struct Restricted <: Ztype end  # same λ for all questions (bit of toy model)
 struct Unrestricted <: Ztype end # # separate λ for all questions
 
-# # model with λvector the same for all questions (less parameters)
-# @model function logtarget(::Restricted, 𝒪s, p; σ=3)
-#     n = length(𝒪s)
-#     # σ² ~ InverseGamma(0.1, 0.1)
-#     # σα² ~ InverseGamma(0.1, 0.1)
-#     σ² = 1.0
-#     σα² ~ truncated(Cauchy(0, 2), 0, Inf)#Exponential(2.0) #InverseGamma(0.1, 0.1)
-
-#     γup ~ filldist(Normal(0,sqrt(σ²)), p.DIM_COVARIATES)
-#     γdown ~ filldist(Normal(0,sqrt(σ²)), p.DIM_COVARIATES)  
-#     αup ~ filldist(Normal(0,sqrt(σα²)), n)  
-#     αdown ~ filldist(Normal(0,sqrt(σα²)), n)  
-
-#     Z0 ~ filldist(truncated(Exponential(), 0.1,Inf), p.NUM_HIDDENSTATES) 
-#     θ = ComponentArray(γ12 = γup, γ21 = γdown, γ23 = γup,
-#                         γ32 = γdown, Z1=Z0, Z2=Z0, Z3=Z0, Z4=Z0, αup=αup, αdown=αdown)
-#     Turing.@addlogprob! loglik(θ, 𝒪s, p)
-# end
 
 @model function logtarget(::Unrestricted, 𝒪s, p)
-    #σ² ~ truncated(Cauchy(0, 2), 0, Inf)
     σ ~ Exponential(3.0)
     
     γ12 ~ filldist(Normal(0.0, σ), p.DIM_COVARIATES)
@@ -54,7 +35,6 @@ struct Unrestricted <: Ztype end # # separate λ for all questions
     Z4 ~ filldist(Exponential(), p.NUM_HIDDENSTATES) 
 
     θ = ComponentArray(γ12 = γ12, γ23 = γ23, γ21 = γ21, γ32 = γ32, Z1=Z1, Z2=Z2, Z3=Z3, Z4=Z4)
-
 
     Turing.@addlogprob! loglik(θ, 𝒪s, p)
 end
