@@ -3,6 +3,19 @@ library(readxl)
 library(tidyverse)
 library(dplyr)
 
+mytheme = theme_bw()
+theme_set(mytheme)
+
+scale_fill_chris <- function(...){
+  ggplot2:::manual_scale(
+    'fill', 
+    values = setNames(c('green', 'blue', 'red', 'orange'), c("b1", "b2", "b3", "b4")
+                      ), 
+    ...
+  )
+}
+
+
 # Plot betas
 
 betas <- read.csv("Betas.csv")
@@ -13,17 +26,17 @@ betas$parameter <- factor(betas$parameter,
 
 b <- ggplot(betas,aes(x=value,y=parameter, colour = parameter)) + 
   geom_errorbar(aes(xmin=value-se,xmax=value+se), width=.1) +
-  geom_line() +
   geom_point() +
   geom_vline(xintercept = 0) +
   scale_x_continuous(labels = function(x) format(x, nsmall = 2)) +
   scale_y_discrete(labels = c("b1" = "\u03b2 1","b2" = "\u03b2 2","b3" = "\u03b2 3","b4" = "\u03b2 4")) +
-  ylab("Parameter") +
+  ylab("parameter") +
   theme(axis.title.x=element_blank(),axis.title.y = element_text(angle = 90),legend.position = "bottom") +
-  facet_wrap(~transition)
-b + scale_colour_discrete(name="Covariate", limits = c("b1","b2","b3","b4"), labels=c("Intercept","Sport","Strength","Competition"))
+  facet_wrap(~transition, scales="free")
+b + scale_colour_discrete(name="covariate", limits = c("b1","b2","b3","b4"), 
+                          labels=c("Intercept","Sport","Strength","Competition")) 
 
-#ggsave(filename = "Betas_LMest.png",width = 8, height = 9, dpi = 300)
+ggsave(filename = "Betas_LMest.png",width = 7, height = 3, dpi = 300)
 
 # Plot gammas
 
@@ -42,42 +55,69 @@ transition_names <- c("12" = "1 -> 2",
 
 g <- ggplot(gammas,aes(x=value,y=parameter, colour = parameter)) + 
   geom_errorbar(aes(xmin=value-se,xmax=value+se), width=.1) +
-  geom_line() +
+  #geom_line() +
   geom_point() +
   geom_vline(xintercept = 0) +
   scale_x_continuous(labels = function(x) format(x, nsmall = 2)) +
   xlim(-3.5,1) +
   scale_y_discrete(labels = c("g1" = "\u03b3 1","g2" = "\u03b3 2","g3" = "\u03b3 3","g4" = "\u03b3 4")) +
-  ylab("Parameter") +
+  ylab("parameter") +
   theme(axis.title.x=element_blank(),axis.title.y = element_text(angle = 90),legend.position = "bottom") +
   facet_wrap(~transition, labeller = as_labeller(transition_names), nrow = 3, ncol = 2)
-g + scale_colour_discrete(name="Covariate", limits = c("g1","g2","g3","g4"), labels=c("Intercept","Sport","Strength","Competition"))
+g + scale_colour_discrete(name="covariate", limits = c("g1","g2","g3","g4"), labels=c("Intercept","Sport","Strength","Competition"))
 
-#ggsave(filename = "Gammas_LMest.png",width = 8, height = 9, dpi = 300)
+ggsave(filename = "Gammas_LMest.png",width = 7, height = 7, dpi = 300)
+
+
+# also without gamma_1 (intercept estimate)
+g2 <- gammas %>% dplyr::filter(parameter %in% c("g2", "g3", "g4")) %>% 
+  ggplot(aes(x=value,y=parameter, colour = parameter)) + 
+  geom_errorbar(aes(xmin=value-se,xmax=value+se), width=.1) +
+  #geom_line() +
+  geom_point() +
+  geom_vline(xintercept = 0) +
+  scale_x_continuous(labels = function(x) format(x, nsmall = 2)) +
+  #xlim(-3.5,1) +
+  scale_y_discrete(labels = c("g2" = "\u03b3 2","g3" = "\u03b3 3","g4" = "\u03b3 4")) +
+  ylab("parameter") +
+  theme(axis.title.x=element_blank(),axis.title.y = element_text(angle = 90),legend.position = "bottom") +
+  facet_wrap(~transition, labeller = as_labeller(transition_names), nrow = 3, ncol = 2, scales="free")
+g2 + scale_colour_discrete(name="covariate", limits = c("g2","g3","g4"), labels=c("Sport","Strength","Competition"))
+
+ggsave(filename = "Gammas_LMest_withoutintercept.png",width = 7, height = 7, dpi = 300)
+
+
+
+
+
 
 # Plot path
 
 path_pred <- read.csv("PathPrediction_data.csv")
 
-# Transition probabilities for three participants
-transition_probabilities <- ggplot(path_pred, aes(fill=as.factor(state), y=prob, x=as.factor(week))) + 
+# Forward paths for three participants
+forward_paths <- ggplot(path_pred, aes(fill=as.factor(state), y=prob, x=as.factor(week))) + 
   geom_bar(position="stack", stat="identity", width = 0.5) + 
-  ylab("Probability (%)") + 
-  xlab("Week") +
+  ylab("probability (%)") + 
+  xlab("week") +
   scale_fill_discrete(labels=c('State 1', 'State 2', 'State 3')) + 
   #theme(axis.title.x = element_blank(), axis.text.x = element_blank()) +
   theme(legend.title=element_blank()) +
   facet_wrap(~id,nrow = 3, ncol = 1)
-transition_probabilities
+forward_paths
+
+ggsave(filename = "forward_paths.png",width = 7, height = 7, dpi = 300)
 
 covariates <- read.csv("Covariates.csv")
 
 # Training load (same for everyone) for the next 10 weeks
 training_load <- ggplot(covariates, aes(fill=training, y=training_load, x=week)) + 
   geom_bar(position="dodge", stat="identity", width = 0.5) + 
-  xlab("Week") + 
-  ylab("Training load (hours)") + 
+  xlab("week") + 
+  ylab("training load (hours)") + 
   xlim(1,10) +
   scale_x_discrete(limits = c("1","2","3","4","5","6","7","8","9","10")) +
   theme(legend.title=element_blank())
 training_load
+
+ggsave(filename = "training_load.png",width = 7, height = 3, dpi = 300)

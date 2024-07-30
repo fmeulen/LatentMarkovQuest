@@ -69,7 +69,7 @@ miss = map(o -> countmissing(o.X, o.Y), 𝒪s)
 #scatter(first.(miss), last.(miss))
 
 # visualisation of the data
-𝒪 = 𝒪s[24]
+𝒪 = 𝒪s[1]
 pp1 = plot(getindex.(𝒪.X,2))
 pp2 = plot(getindex.(𝒪.X,3))
 pp3 = plot(getindex.(𝒪.X,4))
@@ -78,8 +78,13 @@ pp5 = plot(getindex.(𝒪.Y,2))
 pp6 = plot(getindex.(𝒪.Y,3))
 pp7 = plot(getindex.(𝒪.Y,4))
 plot(pp1, pp2, pp3, pp4, pp5, pp6, pp7)
-
-
+for i in eachindex(𝒪s)
+    𝒪 = 𝒪s[i]
+    c23 = cor(getindex.(𝒪.X,2), getindex.(𝒪.X,3))
+    c34 = cor(getindex.(𝒪.X,3), getindex.(𝒪.X,4))
+    c24 = cor(getindex.(𝒪.X,2), getindex.(𝒪.X,4))
+    @show [c23, c34, c24]
+end
 
 
 
@@ -108,12 +113,15 @@ names_map = String.(names(map_estimate.values)[1])
 
 # ----------- mcmc ---------------------------
 #sampler = Turing.NUTS(adtype=AutoReverseDiff())
+# using DynamicHMC
+# sampler = externalsampler(DynamicHMC.NUTS())
 
 sampler = Turing.NUTS()
-@time chain = sample(model, sampler, MCMCThreads(), 800, 5; progress=true)
+@time chain = sample(model, sampler, MCMCThreads(), 2000, 4; progress=true)
 
 plot(chain)
 savefig(wd*"/figs/olympic_histograms_traces.pdf")
+
 
 # write output to CSV
 CSV.write(wd*"/figs/iterates.csv", DataFrame(chain))
@@ -132,11 +140,11 @@ names_par = String.(describe(chain)[1].nt.parameters)
 @show λs
 
 # save objects 
-jldsave("ex_olympicathletes.jld2"; 𝒪s, model, θpm, λs, chain, ztype, map_estimate)
+jldsave("ex_olympicathletes_final.jld2"; 𝒪s, model, θpm, λs, chain, ztype, map_estimate) 
 
 
 ### to open again
-aa = jldopen("ex_olympicathletes.jld2")
+aa = jldopen("ex_olympicathletes_final.jld2")
 aa["𝒪s"]
 ###
 
