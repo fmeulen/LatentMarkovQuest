@@ -16,3 +16,7 @@ mean(getindex.(s,3))
 
 png("priorlambda.png")
 pdf("priorlambda.png")
+
+
+
+

@@ -4,7 +4,7 @@ mapallZtoλ(θ) = hcat(mapZtoλ(θ.Z1), mapZtoλ(θ.Z2), mapZtoλ(θ.Z3), mapZto
 function getpars(θs, names_par; restricted=false)
     @warn "We assume here 4 questions (hence Z1,...,Z4). Adapt if different"
 
-    σ²_ = θs[occursin.("σ²", names_par)]
+    σ_ = θs[occursin.("σ", names_par)]
 
     γ12_ = θs[occursin.("γ12", names_par)]
     γ23_ = θs[occursin.("γ23", names_par)]
@@ -21,7 +21,7 @@ function getpars(θs, names_par; restricted=false)
         Z3_ = θs[occursin.("Z3", names_par)]
         Z4_ = θs[occursin.("Z4", names_par)]
     end
-    ComponentArray(σ²=σ²_,   γ12=γ12_, γ23=γ23_, γ21=γ21_, γ32=γ32_, Z1=Z1_, Z2=Z2_, Z3=Z3_, Z4=Z4_)
+    ComponentArray(σ=σ_,   γ12=γ12_, γ23=γ23_, γ21=γ21_, γ32=γ32_, Z1=Z1_, Z2=Z2_, Z3=Z3_, Z4=Z4_)
 end   
 
 

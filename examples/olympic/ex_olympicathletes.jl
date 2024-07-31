@@ -3,8 +3,6 @@
 using CSV
 using DataFrames
 using JLD2 
-using ReverseDiff
-using Tidier
 using RCall
 
 
@@ -112,10 +110,6 @@ names_map = String.(names(map_estimate.values)[1])
 @show mapallZtoλ(θmap)'
 
 # ----------- mcmc ---------------------------
-#sampler = Turing.NUTS(adtype=AutoReverseDiff())
-# using DynamicHMC
-# sampler = externalsampler(DynamicHMC.NUTS())
-
 sampler = Turing.NUTS()
 @time chain = sample(model, sampler, MCMCThreads(), 2000, 4; progress=true)
 
@@ -148,12 +142,6 @@ jldsave("ex_olympicathletes_final.jld2"; 𝒪s, model, θpm, λs, chain, ztype, 
 aa = jldopen("ex_olympicathletes_final.jld2")
 aa["𝒪s"]
 ###
-
-
-
-
-
-
 
 
 
