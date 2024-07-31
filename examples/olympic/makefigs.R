@@ -85,7 +85,26 @@ ggsave("figs/Gammas_Bayes_estimates_withoutintercept.png", width=7, height=4.67)
 
 
 
+# forward paths
 
+
+pathpred = read_csv("figs/simulated_scenarios.csv", col_types = cols(week = col_character(), state = col_character()))
+                                                              
+
+# Forward paths for three participants
+forward_paths <- ggplot(pathpred, aes(fill=as.factor(state), y=prob, x=as.factor(week))) + 
+  geom_bar(position="stack", stat="identity", width = 0.5) + 
+  ylab("probability (%)") + 
+  xlab("week") +
+  scale_fill_discrete(labels=c('State 1', 'State 2', 'State 3')) + 
+  theme(axis.title.x=element_blank(),axis.title.y = element_text(angle = 90),legend.position = "bottom") +
+  #  scale_fill_manual(values = cbPallete) +
+  #theme(axis.title.x = element_blank(), axis.text.x = element_blank()) +
+  theme(legend.title=element_blank()) +
+  facet_wrap(~athlete,nrow = 3, ncol = 1)
+forward_paths
+
+ggsave(filename = "figs/forward_paths_Bayes.png",width = 7, height = 6, dpi = 300)
 
 
 

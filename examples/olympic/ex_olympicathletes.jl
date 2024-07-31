@@ -109,6 +109,16 @@ names_map = String.(names(map_estimate.values)[1])
 θmap = getpars(θmapval, names_map)
 @show mapallZtoλ(θmap)'
 
+#--------------- mle -----------------------
+mle_estimate = maximum_likelihood(model)
+
+names_mle = String.(names(mle_estimate.values)[1])
+θmleval = mle_estimate.values
+θmle = getpars(θmleval, names_mle)
+@show mapallZtoλ(θmle)'
+
+
+
 # ----------- mcmc ---------------------------
 sampler = Turing.NUTS()
 @time chain = sample(model, sampler, MCMCThreads(), 2000, 4; progress=true)
@@ -158,48 +168,69 @@ names_ = vcat(chain.name_map.parameters, chain.name_map.internals)
 
 # set training load and initial latent status
 trainingload = CSV.read("Covariates_standardised.csv", DataFrame)
-
 X = [SA[x...] for x in eachrow(trainingload)]
-U0 = 3 # presently assumed latent state
-
-scenarios = Vector{Int64}[]
-for i ∈ 1:size(vals)[1]
-    γ12 = collect(vals[i, 4:7])
-    γ23 = collect(vals[i, 8:11])
-    γ21 = collect(vals[i, 12:15])
-    γ32 = collect(vals[i, 16:19])
-
-    θ =  ComponentArray(γ12=γ12, γ21=γ21, γ23=γ23, γ32=γ32)
-    latentpath = sample_latent(θ, X, U0, p,i)
-    push!(scenarios, latentpath)
-end
-
-# compute proportions at each future time instance
-prs = []
-L = length(scenarios[1])
-for k in 1:L
-    x = getindex.(scenarios, k)
-    pr = proportions(x,p.NUM_HIDDENSTATES) 
-    push!(prs, pr)
-end
 
 
-#----------- make a barplot using R's ggplot -------------------
-dbar = DataFrame(y= vcat(prs...), 
-                 x = repeat(0:10, inner=3), 
-                 state= repeat(["1", "2", "3"], outer=11))
-
-
-@rput dbar
-R"""
-library(tidyverse)
-mytheme = theme_bw()
-theme_set(mytheme)  
-
-dbar %>%  ggplot(aes(x=x,y=y, fill=state)) + geom_bar(stat="identity") + labs(x="time", y="state") +
-scale_x_continuous(breaks=0:10)
-ggsave("figs/forward_latent.pdf", width=6, height=2.5)
 """
+    sample_future_scenarios(chain, X, U0, p)
+
+    chain: output of HMC
+    X: vector of training scenarios
+    U0 ∈ {1,2,3}: initial latent state
+
+    returns tuple with scenarios and marginal probabilities at each future time instance 
+"""
+function sample_future_scenarios(chain, X, U0, p)
+    Random.seed!(2)
+    vals = DataFrame(chain)
+    scenarios = Vector{Int64}[]
+    for i ∈ 1:size(vals)[1]
+        γ12 = collect(vals[i, 4:7])
+        γ23 = collect(vals[i, 8:11])
+        γ21 = collect(vals[i, 12:15])
+        γ32 = collect(vals[i, 16:19])
+
+        θ =  ComponentArray(γ12=γ12, γ21=γ21, γ23=γ23, γ32=γ32)
+        
+        latentpath = sample_latent(θ, X, U0, p, 1)
+        push!(scenarios, latentpath)    
+    end
+
+    # compute proportions at each future time instance
+    prs = []
+    L = length(scenarios[1])
+    for k in 1:L
+        x = getindex.(scenarios, k)
+        pr = proportions(x,p.NUM_HIDDENSTATES) 
+        push!(prs, pr)
+    end
+    (scenarios=scenarios, proportions=prs)
+end
+
+U0 = [1, 2, 3] # presently assumed latent states
+S1 = sample_future_scenarios(chain, X, U0[1], p)
+S2 = sample_future_scenarios(chain, X, U0[2], p)
+S3 = sample_future_scenarios(chain, X, U0[3], p)
+#----------- make a barplot using R's ggplot -------------------
+L = length(X)
+
+dbar1 = DataFrame(prob= vcat(S1.proportions...), week = repeat(0:L, inner=3), state= repeat(["1", "2", "3"], outer=L+1), athlete=fill("Athlete 1",3*(L+1)))
+dbar2 = DataFrame(prob= vcat(S2.proportions...), week = repeat(0:L, inner=3), state= repeat(["1", "2", "3"], outer=L+1), athlete=fill("Athlete 2",3*(L+1)))
+dbar3 = DataFrame(prob= vcat(S3.proportions...), week = repeat(0:L, inner=3), state= repeat(["1", "2", "3"], outer=L+1), athlete=fill("Athlete 3",3*(L+1)))
+
+CSV.write(wd*"/figs/simulated_scenarios.csv", vcat(dbar1, dbar2, dbar3))
+
+
+# @rput dbar
+# R"""
+# library(tidyverse)
+# mytheme = theme_bw()
+# theme_set(mytheme)  
+
+# dbar %>%  ggplot(aes(x=week,y=prob, fill=state)) + geom_bar(stat="identity") + labs(x="time", y="state") +
+# scale_x_continuous(breaks=0:10)
+# ggsave("figs/forward_latent.pdf", width=6, height=2.5)
+# """
 
 
 

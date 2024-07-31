@@ -98,13 +98,14 @@ forward_paths <- ggplot(path_pred, aes(fill=as.factor(state), y=prob, x=as.facto
   ylab("probability (%)") + 
   xlab("week") +
   scale_fill_discrete(labels=c('State 1', 'State 2', 'State 3')) + 
+  theme(axis.title.x=element_blank(),axis.title.y = element_text(angle = 90),legend.position = "bottom") +
 #  scale_fill_manual(values = cbPallete) +
   #theme(axis.title.x = element_blank(), axis.text.x = element_blank()) +
   theme(legend.title=element_blank()) +
   facet_wrap(~id,nrow = 3, ncol = 1)
 forward_paths
 
-ggsave(filename = "forward_paths.png",width = 7, height = 7, dpi = 300)
+ggsave(filename = "forward_paths.png",width = 7, height = 6, dpi = 300)
 
 covariates <- read.csv("Covariates.csv")
 
