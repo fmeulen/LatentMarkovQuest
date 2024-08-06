@@ -6,6 +6,7 @@ library(dplyr)
 mytheme = theme_bw()
 theme_set(mytheme)
 
+setwd("~/.julia/dev/LatentMarkovQuest/examples/olympic/analysis_in_R_larisa")
 
 cbPallete <- c("Competition"= "#E69F00", "Sport"="#56B4E9", "Strength"="#009E73", "Intercept"= "#0072B2")
 
@@ -90,10 +91,15 @@ ggsave(filename = "Gammas_LMest_withoutintercept.png",width = 7, height = 7, dpi
 
 # Plot path
 
-path_pred <- read.csv("PathPrediction_data.csv")
+
+pathpred <- read_csv("PathPrediction_data_v3.csv", 
+                                    col_types = cols(state = col_character(), 
+                                                     week = col_factor(levels = c("0", 
+                                                                                  "1", "2", "3", "4", "5", "6", 
+                                                                                  "7", "8", "9", "10")))) 
 
 # Forward paths for three participants
-forward_paths <- ggplot(path_pred, aes(fill=as.factor(state), y=prob, x=as.factor(week))) + 
+forward_paths <- ggplot(pathpred, aes(fill=as.factor(state), y=prob, x=week)) + 
   geom_bar(position="stack", stat="identity", width = 0.5) + 
   ylab("probability (%)") + 
   xlab("week") +
